@@ -59,6 +59,8 @@ export default function RootLayout() {
             <Stack.Screen name="account/index" />
             <Stack.Screen name="sign-up/index" />
             <Stack.Screen name="eventlanding/index" />
+            <Stack.Screen name="landing_form/index" />
+            <Stack.Screen name="landing_form2" />
           </Stack>
         </ThemedView>
         <StatusBar style="auto" />

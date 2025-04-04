@@ -34,7 +34,8 @@ export default function MyEvents() {
     }
 
     const navigateToCreateEvent = () => {
-        router.push('/account');
+        router.push('/landing_form'); // ✅ forces the literal string
+
     };
 
     const EventItem = ({ event  } : any ) => (
