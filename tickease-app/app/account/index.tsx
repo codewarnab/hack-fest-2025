@@ -27,16 +27,6 @@ export default function Account() {
         }
     }, [session]);
 
-    // Check if all required profile fields are filled
-    useEffect(() => {
-        // Define which fields are required for a complete profile
-        // You can adjust this based on your requirements
-        const requiredFields = [name, organizion_name, contactPhone];
-        const allFieldsFilled = requiredFields.every(field => field && field.trim() !== '');
-
-        setIsProfileComplete(allFieldsFilled);
-    }, [name, organizion_name, contactPhone]);
-
     async function getProfile() {
         try {
             setLoading(true);
@@ -57,6 +47,21 @@ export default function Account() {
                 setContactPhone(data.contact_phone || '');
                 setDiscovery(data.discovery || '');
                 setBio(data.bio || '');
+
+                // Check if all required fields are filled after fetching data
+                const requiredFields = [
+                    data.name || '',
+                    data.organizion_name || '',
+                    data.contact_phone || ''
+                ];
+                const allFieldsFilled = requiredFields.every(field => field && field.trim() !== '');
+
+                setIsProfileComplete(allFieldsFilled);
+
+                // If profile is complete, set isUpdated to true to disable fields
+                if (allFieldsFilled) {
+                    setIsUpdated(true);
+                }
             }
         } catch (error) {
             if (error instanceof Error) {
@@ -223,18 +228,13 @@ export default function Account() {
                 <TouchableOpacity
                     style={[
                         styles.updateButton,
-                        (loading || isProfileComplete) && styles.buttonDisabled
+                        loading && styles.buttonDisabled
                     ]}
                     onPress={handleUpdateProfile}
-                    disabled={loading || isProfileComplete}
+                    disabled={loading}
                 >
                     <Text style={styles.updateButtonText}>
-                        {loading
-                            ? 'Updating...'
-                            : isProfileComplete
-                                ? 'Profile Complete'
-                                : 'Update Profile'
-                        }
+                        {loading ? 'Updating...' : 'Update Profile'}
                     </Text>
                 </TouchableOpacity>
             )}
@@ -242,14 +242,7 @@ export default function Account() {
             {isUpdated && (
                 <View style={styles.updatedMessage}>
                     <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                    <Text style={styles.updatedMessageText}>Profile updated successfully!</Text>
-                </View>
-            )}
-
-            {isProfileComplete && !isUpdated && (
-                <View style={styles.updatedMessage}>
-                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                    <Text style={styles.updatedMessageText}>Your profile is complete!</Text>
+                    <Text style={styles.updatedMessageText}>Profile complete!</Text>
                 </View>
             )}
 
@@ -333,8 +326,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
     },
     disabledInput: {
-        color: '#888',
+        color: '#333', // Changed from '#888' to a darker color
         backgroundColor: '#F5F7FF',
+        fontWeight: 'bold', // Added bold text
     },
     textAreaContainer: {
         borderBottomColor: '#DFE3FF',
