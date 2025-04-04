@@ -9,7 +9,6 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import "react-native-reanimated";
-// import { useColorScheme } from "@/hooks/useColorScheme";
 import { ThemedView } from "@/components/ThemedView";
 import {
   useFonts,
@@ -19,8 +18,7 @@ import {
   Roboto_900Black,
 } from "@expo-google-fonts/roboto";
 import { Platform, useColorScheme } from "react-native";
-import { SessionProvider } from '@/context/SessionProvider';
-
+import { SessionProvider } from "@/context/SessionProvider";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -35,19 +33,14 @@ export default function RootLayout() {
   useEffect(() => {
     console.log("Fonts loaded:", fontsLoaded);
     const setNavBar = async () => {
-
       try {
-        // ensures splash screen is visible during setup
         await SplashScreen.preventAutoHideAsync();
-        // enables edge-to-edge mode
         await NavigationBar.setPositionAsync("absolute");
-        // transparent backgrounds to see through
         await NavigationBar.setBackgroundColorAsync("#ffffff00");
       } catch (e) {
         console.warn("Error setting navigation bar:", e);
       } finally {
         if (fontsLoaded) {
-          // hide splash screen once setup and fonts are complete
           await SplashScreen.hideAsync();
         }
       }
@@ -59,14 +52,13 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
-
-      <ThemeProvider value={false ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         <ThemedView style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="onboarding" />
-            <Stack.Screen name="sign/index" />
             <Stack.Screen name="account/index" />
             <Stack.Screen name="sign-up/index" />
+            <Stack.Screen name="eventlanding/index" />
           </Stack>
         </ThemedView>
         <StatusBar style="auto" />

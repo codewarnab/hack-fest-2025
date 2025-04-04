@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "tickease-app",
-    "slug": "tickease-app",
+    "name": "react-native-onboarding",
+    "slug": "event-management",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

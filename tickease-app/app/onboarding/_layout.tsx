@@ -4,6 +4,7 @@ import React from "react";
 const OPTION_CONFIG = {
   presentation: "transparentModal" as const,
   animation: "none" as const,
+  cardStyle: { backgroundColor: "#FFFFFF" }, // Set a white background color
 };
 
 export default function Layout() {

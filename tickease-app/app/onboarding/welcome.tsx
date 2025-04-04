@@ -30,7 +30,7 @@ export default function Auth() {
         })
 
         if (data) {
-            router.push("/myevents")
+            router.push("/eventlanding")
         }
 
         if (error) Alert.alert('Sign In Error', error.message)
