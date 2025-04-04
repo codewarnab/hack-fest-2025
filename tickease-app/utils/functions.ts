@@ -55,7 +55,7 @@ const updateProfile = async (userId: string, profileData: UserProfile) => {
 
     console.log('Profile updated successfully:', data);
 
-    return data;
+    return "success";
 }
 
 export default updateProfile;
