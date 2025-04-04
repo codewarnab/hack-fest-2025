@@ -1,41 +1,41 @@
-// Account.tsx
 import { useState, useEffect } from 'react';
-import { View, Alert, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Modal, ActivityIndicator } from 'react-native';
+import { View, Alert, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Input } from '@rneui/themed';
 import { useSession } from '@/context/SessionProvider';
 import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
-import { toByteArray } from 'base64-js';
-
-function decode(base64String: string): Uint8Array {
-    return toByteArray(base64String);
-}
-
-
+import updateProfile, { UserProfile } from '@/utils/functions';
 
 export default function Account() {
     const session = useSession();
     const [loading, setLoading] = useState(true);
-    const [uploadLoading, setUploadLoading] = useState(false);
     const [name, setName] = useState('');
-    const [organizationName, setOrganizationName] = useState('');
+    const [organizion_name, setOrganizationName] = useState('');
     const [contactPhone, setContactPhone] = useState('');
-    const [website, setWebsite] = useState('');
     const [discovery, setDiscovery] = useState('');
     const [bio, setBio] = useState('');
-    const [avatarUrl, setAvatarUrl] = useState('');
-    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [isUpdated, setIsUpdated] = useState(false);
+    const [isProfileComplete, setIsProfileComplete] = useState(false);
 
     useEffect(() => {
         if (session) {
             getProfile();
         } else {
+            console.log('No session found, redirecting to onboarding...');
             router.replace('/onboarding/welcome');
         }
     }, [session]);
+
+    // Check if all required profile fields are filled
+    useEffect(() => {
+        // Define which fields are required for a complete profile
+        // You can adjust this based on your requirements
+        const requiredFields = [name, organizion_name, contactPhone];
+        const allFieldsFilled = requiredFields.every(field => field && field.trim() !== '');
+
+        setIsProfileComplete(allFieldsFilled);
+    }, [name, organizion_name, contactPhone]);
 
     async function getProfile() {
         try {
@@ -44,20 +44,19 @@ export default function Account() {
 
             const { data, error } = await supabase
                 .from('users')
-                .select(`name, organization_name, contact_phone, website, discovery, bio, avatar_url`)
+                .select(`name, organizion_name , contact_phone,  discovery, bio`)
                 .eq('id', session.user.id)
                 .single();
+            console.log('Profile data:', data, error);
 
             if (error && error.code !== '406') throw error;
 
             if (data) {
                 setName(data.name || '');
-                setOrganizationName(data.organization_name || '');
+                setOrganizationName(data.organizion_name || '');
                 setContactPhone(data.contact_phone || '');
-                setWebsite(data.website || '');
                 setDiscovery(data.discovery || '');
                 setBio(data.bio || '');
-                setAvatarUrl(data.avatar_url || '');
             }
         } catch (error) {
             if (error instanceof Error) {
@@ -68,30 +67,32 @@ export default function Account() {
         }
     }
 
-    async function updateProfile() {
+    async function handleUpdateProfile() {
         try {
             setLoading(true);
             if (!session?.user) throw new Error('No user on the session!');
 
-            const updates = {
-                id: session.user.id,
+            const profileData: UserProfile = {
                 name,
-                organization_name: organizationName,
+                organizion_name,
                 contact_phone: contactPhone,
-                website,
-                discovery,
                 bio,
-                avatar_url: avatarUrl,
-                updated_at: new Date(),
+                discovery: discovery,
+                // Add email if you want to update it (though typically this might be restricted)
             };
-
-            const { error } = await supabase.from('users').upsert(updates);
-
-            if (error) {
-                throw error;
+            console.log('Profile data to update:', profileData);
+            const result = await updateProfile(session.user.id, profileData);
+            // console.log('Update result:', result);
+            if (result === null) {
+                throw new Error('Failed to update profile');
             }
 
+            // Refresh the profile data
+            await getProfile();
             Alert.alert('Success', 'Your profile has been updated!');
+
+            // Set the state to indicate profile has been updated
+            setIsUpdated(true);
         } catch (error) {
             if (error instanceof Error) {
                 Alert.alert('Error updating profile', error.message);
@@ -116,127 +117,6 @@ export default function Account() {
         }
     }
 
-    async function uploadFromCamera() {
-        try {
-            const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
-            if (!permissionResult.granted) {
-                Alert.alert('Permission Required', 'Camera access is needed to take photos');
-                return;
-            }
-
-            const result = await ImagePicker.launchCameraAsync({
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-                base64: true,
-            });
-
-            if (!result.canceled && result.assets && result.assets[0]) {
-                await uploadImage(result.assets[0].uri, result.assets[0].base64);
-            }
-        } catch (error) {
-            Alert.alert('Error', 'An error occurred while using the camera');
-        } finally {
-            setShowUploadModal(false);
-        }
-    }
-
-    async function uploadFromGallery() {
-        try {
-            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-            if (!permissionResult.granted) {
-                Alert.alert('Permission Required', 'Gallery access is needed to select photos');
-                return;
-            }
-
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [1, 1],
-                quality: 0.8,
-                base64: true,
-            });
-
-            if (!result.canceled && result.assets && result.assets[0]) {
-                await uploadImage(result.assets[0].uri, result.assets[0].base64);
-            }
-        } catch (error) {
-            Alert.alert('Error', 'An error occurred while selecting from gallery');
-        } finally {
-            setShowUploadModal(false);
-        }
-    }
-
-    async function uploadImage(uri:any, base64Data:any) {
-        try {
-            setUploadLoading(true);
-            if (!session?.user) throw new Error('No user on the session!');
-
-            // Create a unique file path for the image
-            const fileExt = uri.split('.').pop();
-            const fileName = `${session.user.id}_${Date.now()}.${fileExt}`;
-            const filePath = `avatars/${fileName}`;
-
-            let fileData;
-            if (base64Data) {
-                fileData = decode(base64Data);
-            } else {
-                // If base64 is not available, read the file
-                const fileInfo = await FileSystem.getInfoAsync(uri);
-                if (!fileInfo.exists) {
-                    throw new Error('File does not exist');
-                }
-                const fileContent = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-                fileData = decode(fileContent);
-            }
-
-            // Upload the image to Supabase Storage
-            const { error: uploadError } = await supabase.storage
-                .from('profiles')
-                .upload(filePath, fileData, {
-                    contentType: `image/${fileExt}`,
-                    upsert: true,
-                });
-
-            if (uploadError) throw uploadError;
-
-            // Get the public URL for the image
-            const { data } = supabase.storage.from('profiles').getPublicUrl(filePath);
-            const newAvatarUrl = data.publicUrl;
-
-            // Update the avatar URL in state and database
-            setAvatarUrl(newAvatarUrl);
-            await updateAvatarInDatabase(newAvatarUrl);
-
-            Alert.alert('Success', 'Profile picture updated!');
-        } catch (error) {
-            if (error instanceof Error) {
-                Alert.alert('Error uploading image', error.message);
-            } else {
-                Alert.alert('Error', 'An unknown error occurred when uploading');
-            }
-        } finally {
-            setUploadLoading(false);
-        }
-    }
-
-    async function updateAvatarInDatabase(url:any) {
-        try {
-            if (!session?.user) throw new Error('No user on the session!');
-
-            const { error } = await supabase
-                .from('users')
-                .update({ avatar_url: url })
-                .eq('id', session.user.id);
-
-            if (error) throw error;
-        } catch (error) {
-            throw error;
-        }
-    }
-
     if (!session) {
         return (
             <View style={styles.loadingContainer}>
@@ -255,31 +135,6 @@ export default function Account() {
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.profileImageContainer}>
-                {uploadLoading ? (
-                    <View style={styles.profileImagePlaceholder}>
-                        <ActivityIndicator color="#6366F1" size="large" />
-                    </View>
-                ) : avatarUrl ? (
-                    <Image source={{ uri: avatarUrl }} style={styles.profileImage} />
-                ) : (
-                    <View style={styles.profileImagePlaceholder}>
-                        <Text style={styles.profileImagePlaceholderText}>
-                            {name?.charAt(0) || session.user.email?.charAt(0) || '?'}
-                        </Text>
-                    </View>
-                )}
-                <TouchableOpacity
-                    style={styles.uploadButton}
-                    onPress={() => setShowUploadModal(true)}
-                    disabled={uploadLoading}
-                >
-                    <Text style={styles.uploadButtonText}>
-                        {uploadLoading ? 'Uploading...' : 'Upload Photo'}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
             <View style={styles.card}>
                 <Text style={styles.sectionTitle}>Basic Information</Text>
                 <Input
@@ -295,22 +150,26 @@ export default function Account() {
                 <Input
                     label="Name"
                     value={name}
-                    onChangeText={setName}
+                    onChangeText={isUpdated ? undefined : setName}
                     placeholder="Your full name"
                     labelStyle={styles.inputLabel}
                     inputContainerStyle={styles.inputContainer}
                     inputStyle={styles.input}
                     rightIcon={<Ionicons name="person" size={20} color="#6366F1" />}
+                    disabled={isUpdated}
+                    disabledInputStyle={styles.disabledInput}
                 />
                 <Input
                     label="Organization Name"
-                    value={organizationName}
-                    onChangeText={setOrganizationName}
+                    value={organizion_name}
+                    onChangeText={isUpdated ? undefined : setOrganizationName}
                     placeholder="Your organization's name"
                     labelStyle={styles.inputLabel}
                     inputContainerStyle={styles.inputContainer}
                     inputStyle={styles.input}
                     rightIcon={<Ionicons name="business" size={20} color="#6366F1" />}
+                    disabled={isUpdated}
+                    disabledInputStyle={styles.disabledInput}
                 />
             </View>
 
@@ -319,24 +178,15 @@ export default function Account() {
                 <Input
                     label="Phone Number"
                     value={contactPhone}
-                    onChangeText={setContactPhone}
+                    onChangeText={isUpdated ? undefined : setContactPhone}
                     placeholder="Your contact phone"
                     labelStyle={styles.inputLabel}
                     inputContainerStyle={styles.inputContainer}
                     inputStyle={styles.input}
                     keyboardType="phone-pad"
                     rightIcon={<Ionicons name="call" size={20} color="#6366F1" />}
-                />
-                <Input
-                    label="Website"
-                    value={website}
-                    onChangeText={setWebsite}
-                    placeholder="Your website URL"
-                    labelStyle={styles.inputLabel}
-                    inputContainerStyle={styles.inputContainer}
-                    inputStyle={styles.input}
-                    keyboardType="url"
-                    rightIcon={<Ionicons name="globe" size={20} color="#6366F1" />}
+                    disabled={isUpdated}
+                    disabledInputStyle={styles.disabledInput}
                 />
             </View>
 
@@ -345,76 +195,67 @@ export default function Account() {
                 <Input
                     label="How did you find us?"
                     value={discovery}
-                    onChangeText={setDiscovery}
+                    onChangeText={isUpdated ? undefined : setDiscovery}
                     placeholder="Social media, friend, search, etc."
                     labelStyle={styles.inputLabel}
                     inputContainerStyle={styles.inputContainer}
                     inputStyle={styles.input}
                     rightIcon={<Ionicons name="search" size={20} color="#6366F1" />}
+                    disabled={isUpdated}
+                    disabledInputStyle={styles.disabledInput}
                 />
                 <Input
                     label="About Your Organization"
                     value={bio}
-                    onChangeText={setBio}
+                    onChangeText={isUpdated ? undefined : setBio}
                     placeholder="Tell us about your organization and events"
                     multiline
                     numberOfLines={4}
                     labelStyle={styles.inputLabel}
                     inputContainerStyle={styles.textAreaContainer}
                     inputStyle={[styles.input, styles.textArea]}
+                    disabled={isUpdated}
+                    disabledInputStyle={styles.disabledInput}
                 />
             </View>
 
-            <TouchableOpacity
-                style={[styles.updateButton, loading && styles.buttonDisabled]}
-                onPress={updateProfile}
-                disabled={loading}
-            >
-                <Text style={styles.updateButtonText}>
-                    {loading ? 'Updating...' : 'Update Profile'}
-                </Text>
-            </TouchableOpacity>
+            {!isUpdated && (
+                <TouchableOpacity
+                    style={[
+                        styles.updateButton,
+                        (loading || isProfileComplete) && styles.buttonDisabled
+                    ]}
+                    onPress={handleUpdateProfile}
+                    disabled={loading || isProfileComplete}
+                >
+                    <Text style={styles.updateButtonText}>
+                        {loading
+                            ? 'Updating...'
+                            : isProfileComplete
+                                ? 'Profile Complete'
+                                : 'Update Profile'
+                        }
+                    </Text>
+                </TouchableOpacity>
+            )}
+
+            {isUpdated && (
+                <View style={styles.updatedMessage}>
+                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                    <Text style={styles.updatedMessageText}>Profile updated successfully!</Text>
+                </View>
+            )}
+
+            {isProfileComplete && !isUpdated && (
+                <View style={styles.updatedMessage}>
+                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                    <Text style={styles.updatedMessageText}>Your profile is complete!</Text>
+                </View>
+            )}
 
             <View style={styles.footer}>
                 <Text style={styles.footerText}>© {new Date().getFullYear()} Event Organizer Portal</Text>
             </View>
-
-            {/* Photo Upload Modal */}
-            <Modal
-                visible={showUploadModal}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setShowUploadModal(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Change Profile Picture</Text>
-
-                        <TouchableOpacity
-                            style={styles.modalButton}
-                            onPress={uploadFromCamera}
-                        >
-                            <Ionicons name="camera" size={24} color="#6366F1" />
-                            <Text style={styles.modalButtonText}>Take Photo</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.modalButton}
-                            onPress={uploadFromGallery}
-                        >
-                            <Ionicons name="images" size={24} color="#6366F1" />
-                            <Text style={styles.modalButtonText}>Choose from Gallery</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.modalButton, styles.cancelButton]}
-                            onPress={() => setShowUploadModal(false)}
-                        >
-                            <Text style={styles.cancelButtonText}>Cancel</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </Modal>
         </ScrollView>
     );
 }
@@ -459,39 +300,6 @@ const styles = StyleSheet.create({
     signOutText: {
         marginLeft: 4,
         color: '#FFF',
-        fontWeight: '500',
-    },
-    profileImageContainer: {
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    profileImage: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        marginBottom: 8,
-    },
-    profileImagePlaceholder: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#DFE3FF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    profileImagePlaceholderText: {
-        fontSize: 40,
-        fontWeight: 'bold',
-        color: '#6366F1',
-    },
-    uploadButton: {
-        padding: 8,
-        backgroundColor: '#DFE3FF',
-        borderRadius: 20,
-    },
-    uploadButtonText: {
-        color: '#6366F1',
         fontWeight: '500',
     },
     card: {
@@ -558,6 +366,22 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
     },
+    updatedMessage: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#E8F5E9',
+        paddingVertical: 16,
+        borderRadius: 12,
+        marginHorizontal: 16,
+        marginBottom: 30,
+    },
+    updatedMessageText: {
+        color: '#4CAF50',
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginLeft: 8,
+    },
     footer: {
         alignItems: 'center',
         paddingVertical: 16,
@@ -565,48 +389,5 @@ const styles = StyleSheet.create({
     },
     footerText: {
         color: '#888',
-    },
-    // Modal Styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        backgroundColor: 'white',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 20,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 20,
-        textAlign: 'center',
-    },
-    modalButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: '#F5F7FF',
-        borderRadius: 10,
-        marginBottom: 12,
-    },
-    modalButtonText: {
-        fontSize: 16,
-        color: '#333',
-        marginLeft: 12,
-    },
-    cancelButton: {
-        backgroundColor: '#FFF',
-        borderWidth: 1,
-        borderColor: '#DFE3FF',
-        justifyContent: 'center',
-    },
-    cancelButtonText: {
-        color: '#6366F1',
-        fontWeight: '500',
-        textAlign: 'center',
     },
 });
