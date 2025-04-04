@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { 
     View, 
@@ -96,7 +97,7 @@ export default function VenueSelection() {
             </View>
 
             {/* Submit button at the bottom */}
-            <TouchableOpacity style={styles.submitButton}>
+            <TouchableOpacity onPress={() => router.push('/reg_form')} style={styles.submitButton}>
                 <Text style={styles.submitButtonText}>Continue</Text>
             </TouchableOpacity>
         </ScrollView>

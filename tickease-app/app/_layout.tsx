@@ -61,6 +61,7 @@ export default function RootLayout() {
             <Stack.Screen name="eventlanding/index" />
             <Stack.Screen name="landing_form/index" />
             <Stack.Screen name="landing_form2" />
+            <Stack.Screen name="reg_form/index" />
           </Stack>
         </ThemedView>
         <StatusBar style="auto" />
