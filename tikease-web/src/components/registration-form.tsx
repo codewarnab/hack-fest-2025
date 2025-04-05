@@ -425,11 +425,9 @@ useEffect(() => {
         }
         
         userId = newUser.id;
-        localStorage.setItem("userId", userId);
-        console.log("UserId ID saved to localStorage:", userId);
-
-
       }
+      localStorage.setItem("userId", userId);
+      console.log("UserId ID saved to localStorage:", userId);
       
       // Now save the registration data
       const { error: registrationError } = await supabase
