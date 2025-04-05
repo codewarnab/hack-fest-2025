@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getEscalationsForUser } from '@/utils/suamn';
@@ -10,23 +10,26 @@ export default function NotificationComponent() {
     const [notifications, setNotifications] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+
+    // Reference to store the subscription
+    const subscriptionRef = useRef(null);
+
     const fetchEscalations = async () => {
         setIsLoading(true);
         setError(null);
-        
+
         try {
             // Get user ID from the session
             const { data: sessionData } = await supabase.auth.getSession();
             const userId = sessionData?.session?.user?.id;
-            
+
             if (!userId) {
                 throw new Error('User not authenticated');
             }
-            
+
             // Fetch escalations
             const escalationsData = await getEscalationsForUser(userId);
-            
+
             if (escalationsData) {
                 // Transform escalations into notification format
                 const notificationsData = escalationsData.map((escalation, index) => ({
@@ -37,8 +40,8 @@ export default function NotificationComponent() {
                     type: mapPriorityToType(escalation.priority),
                     read: false,
                     originalData: escalation
-                }));
-                
+                })).reverse();
+
                 setNotifications(notificationsData);
             } else {
                 setNotifications([]);
@@ -50,7 +53,111 @@ export default function NotificationComponent() {
             setIsLoading(false);
         }
     };
-    
+
+    // Subscribe to realtime updates
+    const subscribeToEscalations = async () => {
+        try {
+            // Get user ID from the session
+            const { data: sessionData } = await supabase.auth.getSession();
+            const userId = sessionData?.session?.user?.id;
+
+            if (!userId) {
+                console.error('Cannot subscribe: User not authenticated');
+                return;
+            }
+
+            // Clean up any existing subscription
+            if (subscriptionRef.current) {
+                supabase.removeChannel(subscriptionRef.current);
+            }
+
+            // Create a new subscription for the escalations table
+            // Filter for records that match the current user
+            const channel = supabase
+                .channel('escalations-channel')
+                .on('postgres_changes', {
+                    event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+                    schema: 'public',
+                    table: 'escalations',
+                    filter: `user_id=eq.${userId}` // Filter for the current user's escalations
+                }, handleRealtimeEvent)
+                .subscribe((status) => {
+                    console.log('Realtime subscription status:', status);
+                });
+
+            subscriptionRef.current = channel;
+
+        } catch (err) {
+            console.error('Error setting up realtime subscription:', err);
+        }
+    };
+
+    // Handle realtime events
+    const handleRealtimeEvent = (payload) => {
+        console.log('Realtime event received:', payload);
+
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+
+        // Handle different event types
+        switch (eventType) {
+            case 'INSERT':
+                // Add new notification
+                if (newRecord) {
+                    const newNotification = {
+                        id: newRecord.id,
+                        title: `Escalation: ${newRecord.priority || 'New'} Priority`,
+                        message: newRecord.issue_summary || 'A new issue has been escalated.',
+                        time: newRecord.Created_at ? new Date(newRecord.Created_at).toLocaleString() : 'Recently',
+                        type: mapPriorityToType(newRecord.priority),
+                        read: false,
+                        originalData: newRecord,
+                        isNew: true // Mark as new to potentially highlight it
+                    };
+
+                    setNotifications(current => [newNotification, ...current]);
+
+                    // Show a toast or other notification if the modal is not open
+                    if (!showNotifications) {
+                        // You could add a toast notification library here
+                        console.log('New escalation received while notifications are closed');
+                    }
+                }
+                break;
+
+            case 'UPDATE':
+                // Update existing notification
+                if (newRecord) {
+                    setNotifications(current =>
+                        current.map(notification =>
+                            notification.originalData?.id === newRecord.id
+                                ? {
+                                    ...notification,
+                                    title: `Escalation: ${newRecord.priority || 'New'} Priority`,
+                                    message: newRecord.issue_summary || 'An issue has been escalated.',
+                                    type: mapPriorityToType(newRecord.priority),
+                                    originalData: newRecord,
+                                    updated: true // Mark as updated to potentially highlight it
+                                }
+                                : notification
+                        )
+                    );
+                }
+                break;
+
+            case 'DELETE':
+                // Remove deleted notification
+                if (oldRecord) {
+                    setNotifications(current =>
+                        current.filter(notification => notification.originalData?.id !== oldRecord.id)
+                    );
+                }
+                break;
+
+            default:
+                console.log('Unhandled event type:', eventType);
+        }
+    };
+
     // Map priority levels to notification types
     const mapPriorityToType = (priority) => {
         switch (priority?.toLowerCase()) {
@@ -64,14 +171,27 @@ export default function NotificationComponent() {
                 return 'info';
         }
     };
-    
-    // Fetch escalations when the component mounts and when notifications are opened
+
+    // Set up realtime subscription when component mounts
+    useEffect(() => {
+        fetchEscalations();
+        subscribeToEscalations();
+
+        // Cleanup subscription when component unmounts
+        return () => {
+            if (subscriptionRef.current) {
+                supabase.removeChannel(subscriptionRef.current);
+            }
+        };
+    }, []);
+
+    // Refresh data when notifications modal is opened
     useEffect(() => {
         if (showNotifications) {
             fetchEscalations();
         }
     }, [showNotifications]);
-    
+
     const unreadCount = notifications.filter(notification => !notification.read).length;
 
     const markAsRead = (id) => {
@@ -90,23 +210,23 @@ export default function NotificationComponent() {
             deleteNotification(notificationId);
             return;
         }
-        
+
         setIsLoading(true);
         try {
             // Get user ID from the session
             const { data: sessionData } = await supabase.auth.getSession();
             const userId = sessionData?.session?.user?.id;
-            
+
             if (!userId) {
                 throw new Error('User not authenticated');
             }
-            
+
             // Delete from the database
             const { error } = await supabase
                 .from('escalations')
                 .delete()
                 .eq('id', escalationId);
-                
+
             if (error) {
                 console.error('Error deleting escalation:', error);
                 Alert.alert('Error', 'Failed to delete the escalation. Please try again.');
@@ -114,6 +234,9 @@ export default function NotificationComponent() {
                 // Remove from local state if successful
                 deleteNotification(notificationId);
                 Alert.alert('Success', 'Escalation deleted successfully.');
+
+                // Note: We don't need to manually update the UI here anymore
+                // because the realtime subscription will handle it
             }
         } catch (err) {
             console.error('Error in deleteEscalation:', err);
@@ -122,7 +245,7 @@ export default function NotificationComponent() {
             setIsLoading(false);
         }
     };
-    
+
     const deleteNotification = (id) => {
         setNotifications(notifications.filter(notification => notification.id !== id));
     };
@@ -215,6 +338,14 @@ export default function NotificationComponent() {
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Escalation Notifications</Text>
                             <View style={styles.modalActions}>
+                                {notifications.length > 0 && (
+                                    <TouchableOpacity
+                                        style={styles.refreshButton}
+                                        onPress={fetchEscalations}
+                                    >
+                                        <Ionicons name="refresh" size={20} color="#6366F1" />
+                                    </TouchableOpacity>
+                                )}
                                 {unreadCount > 0 && (
                                     <TouchableOpacity
                                         style={styles.markAllReadButton}
@@ -241,7 +372,7 @@ export default function NotificationComponent() {
                                 <View style={styles.errorContainer}>
                                     <Ionicons name="alert-circle" size={48} color="#EF4444" />
                                     <Text style={styles.errorText}>{error}</Text>
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         style={styles.retryButton}
                                         onPress={fetchEscalations}
                                     >
@@ -259,7 +390,8 @@ export default function NotificationComponent() {
                                         key={notification.id}
                                         style={[
                                             styles.notificationItem,
-                                            !notification.read && styles.unreadNotification
+                                            !notification.read && styles.unreadNotification,
+                                            notification.isNew && styles.newNotification // Highlight new notifications
                                         ]}
                                         onPress={() => handleNotificationAction(notification)}
                                     >
@@ -272,19 +404,24 @@ export default function NotificationComponent() {
                                         </View>
                                         <View style={styles.notificationContent}>
                                             <View style={styles.notificationHeader}>
-                                                <Text style={styles.notificationTitle}>{notification.title}</Text>
-                                                <TouchableOpacity 
+                                                <Text style={styles.notificationTitle}>
+                                                    {notification.title}
+                                                    {notification.isNew && (
+                                                        <Text style={styles.newBadge}> New</Text>
+                                                    )}
+                                                </Text>
+                                                <TouchableOpacity
                                                     onPress={() => {
                                                         Alert.alert(
                                                             'Delete Escalation',
                                                             'Are you sure you want to delete this escalation?',
                                                             [
                                                                 { text: 'Cancel', style: 'cancel' },
-                                                                { 
-                                                                    text: 'Delete', 
+                                                                {
+                                                                    text: 'Delete',
                                                                     style: 'destructive',
                                                                     onPress: () => deleteEscalation(
-                                                                        notification.id, 
+                                                                        notification.id,
                                                                         notification.originalData?.id
                                                                     )
                                                                 }
@@ -378,6 +515,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
+    refreshButton: {
+        marginRight: 10,
+        padding: 4,
+    },
     markAllReadButton: {
         marginRight: 16,
     },
@@ -396,6 +537,11 @@ const styles = StyleSheet.create({
     },
     unreadNotification: {
         backgroundColor: '#F5F7FF',
+    },
+    newNotification: {
+        backgroundColor: '#EFF6FF', // Light blue background for new notifications
+        borderLeftWidth: 3,
+        borderLeftColor: '#3B82F6',
     },
     notificationIconContainer: {
         width: 40,
@@ -419,6 +565,11 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: 'bold',
         color: '#333',
+    },
+    newBadge: {
+        color: '#3B82F6',
+        fontWeight: 'bold',
+        fontSize: 12,
     },
     deleteButton: {
         padding: 4,
