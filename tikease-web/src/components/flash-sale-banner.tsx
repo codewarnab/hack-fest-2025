@@ -7,6 +7,7 @@ import { CountdownTimer } from "./countdown-timer"
 import { Sparkles } from "lucide-react"
 import { useState } from "react"
 import { formatCurrency } from "@/lib/utils"
+import Link from "next/link"
 
 interface FlashSaleProps {
   title: string
@@ -14,10 +15,10 @@ interface FlashSaleProps {
   salePrice: number
   endTime: Date
   code: string
-  onGetTickets: () => void
+  ticketUrl: string // Changed from onGetTickets function to ticketUrl string
 }
 
-export function FlashSaleBanner({ title, originalPrice, salePrice, endTime, code, onGetTickets }: FlashSaleProps) {
+export function FlashSaleBanner({ title, originalPrice, salePrice, endTime, code, ticketUrl }: FlashSaleProps) {
   const [isCopied, setIsCopied] = useState(false)
   const discount = Math.round(((originalPrice - salePrice) / originalPrice) * 100)
 
@@ -54,15 +55,16 @@ export function FlashSaleBanner({ title, originalPrice, salePrice, endTime, code
               <span className="text-muted-foreground line-through">{formatCurrency(originalPrice)}</span>
             </div>
           </div>
-
           <div className="flex flex-col items-center gap-3">
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-1">Offer ends in:</p>
               <CountdownTimer endTime={endTime} />
             </div>
-            <Button onClick={onGetTickets} className="w-full md:w-auto bg-red-900 bg-blend-soft-light shadow-amber-500 text-white hover:bg-red-950">
-              Get Tickets Now
-            </Button>
+            <Link href={ticketUrl}>
+              <Button className="w-full md:w-auto bg-red-900 bg-blend-soft-light shadow-amber-500 text-white hover:bg-red-950">
+                Get Tickets Now
+              </Button>
+            </Link>
           </div>
         </div>
       </CardContent>
