@@ -19,6 +19,8 @@ import { FontAwesome, MaterialIcons } from '@expo/vector-icons'; // For icons
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image'; // Use Expo Image
+import { initializeEvent, uploadImageToSupabase } from '@/utils/functions'; // Import functions
+import { supabase } from '@/utils/supabase'; // Import supabase client
 
 // --- Constants ---
 const PREDEFINED_CATEGORIES = [
@@ -26,15 +28,15 @@ const PREDEFINED_CATEGORIES = [
 ];
 
 // --- Helper Function for URL Validation ---
-const isValidUrl = (url:string) => {
+const isValidUrl = (url: string) => {
   if (!url) return true; // Allow empty fields
   try {
-    const pattern = new RegExp('^(https?:\\/\\/)'+ // protocol
-      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // domain name
-      '((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address
-      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // port and path
-      '(\\?[;&a-z\\d%_.~+=-]*)?'+ // query string
-      '(\\#[-a-z\\d_]*)?$','i'); // fragment locator
+    const pattern = new RegExp('^(https?:\\/\\/)' + // protocol
+      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // domain name
+      '((\\d{1,3}\\.){3}\\d{1,3}))' + // OR ip (v4) address
+      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // port and path
+      '(\\?[;&a-z\\d%_.~+=-]*)?' + // query string
+      '(\\#[-a-z\\d_]*)?$', 'i'); // fragment locator
     return !!pattern.test(url);
   } catch (e) {
     return false;
@@ -57,11 +59,6 @@ export default function CreateEvent() {
   const [offerEndDateString, setOfferEndDateString] = useState('');
   const [offerEndTimeString, setOfferEndTimeString] = useState('');
 
-  // REMOVE: Picker Visibility State
-  // const [showPicker, setShowPicker] = useState(false);
-  // const [pickerMode, setPickerMode] = useState('date');
-  // const [currentPickerTarget, setCurrentPickerTarget] = useState('eventDate');
-
   // Social Links State
   const [facebookUrl, setFacebookUrl] = useState('');
   const [twitterUrl, setTwitterUrl] = useState('');
@@ -71,7 +68,8 @@ export default function CreateEvent() {
 
   // Banner State
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
-
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // --- Permissions ---
@@ -88,10 +86,6 @@ export default function CreateEvent() {
 
   // --- Handlers ---
 
-  // REMOVE: Date/Time Picker Handlers
-  // const showMode = (modeToShow, target) => { ... };
-  // const onPickerChange = (event, selectedValue) => { ... };
-
   // Image Picker Handler
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -99,12 +93,37 @@ export default function CreateEvent() {
       allowsEditing: true,
       aspect: [16, 9],
       quality: 1,
+      base64: true, // Make sure to get base64 data
     });
 
     if (!result.canceled) {
       setSelectedImageUri(result.assets[0].uri);
+      // Upload the image immediately after selection
+      handleUploadImage(result.assets[0]);
     } else {
-       Alert.alert('Image Selection', 'You did not select any image.');
+      Alert.alert('Image Selection', 'You did not select any image.');
+    }
+  };
+
+  const handleUploadImage = async (imageAsset) => {
+    try {
+      setLoading(true);
+      setUploadProgress(0);
+
+      const result = await uploadImageToSupabase(imageAsset);
+
+      if (result.success) {
+        setImageUrl(result.publicUrl);
+        setUploadProgress(100);
+        Alert.alert('Success', 'Image uploaded successfully!');
+      } else {
+        Alert.alert('Upload Failed', result.error || 'Failed to upload image to storage.');
+      }
+    } catch (error) {
+      console.error('Error in image upload handler:', error);
+      Alert.alert('Upload Failed', error instanceof Error ? error.message : 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -126,7 +145,7 @@ export default function CreateEvent() {
   };
 
   // Submit Handler
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     // --- Validation ---
     if (!title.trim()) return Alert.alert('Missing Info', 'Event title is required.');
     if (!description.trim()) return Alert.alert('Missing Info', 'Event description is required.');
@@ -138,11 +157,6 @@ export default function CreateEvent() {
     if (!eventDateString.trim()) return Alert.alert('Missing Info', 'Event Date is required.');
     if (!eventTimeString.trim()) return Alert.alert('Missing Info', 'Event Time is required.');
     // Optional: Add more specific format validation (e.g., regex) here if needed
-    // Example simple format check (adjust regex as needed):
-    // const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/;
-    // if (!dateRegex.test(eventDateString)) return Alert.alert('Invalid Format', 'Please enter Event Date as MM/DD/YYYY.');
-    // const timeRegex = /^(0[1-9]|1[0-2]):([0-5]\d) (AM|PM)$/i;
-    // if (!timeRegex.test(eventTimeString)) return Alert.alert('Invalid Format', 'Please enter Event Time as HH:MM AM/PM.');
 
     if (maxAttendees.trim() && isNaN(Number(maxAttendees))) return Alert.alert('Invalid Info', 'Max attendees must be a number.');
 
@@ -153,55 +167,77 @@ export default function CreateEvent() {
     if (!isValidUrl(linkedinUrl)) return Alert.alert('Invalid URL', 'Please enter a valid LinkedIn URL.');
     if (!isValidUrl(websiteUrl)) return Alert.alert('Invalid URL', 'Please enter a valid Website URL.');
 
-    // --- Data Consolidation ---
-    // REMOVE: Combining Date objects
-    // const eventStartDateTime = new Date(...);
-    // const offerEndDateTime = new Date(...);
-
-    const eventData = {
-      title,
-      // --- NEW: Use string values directly ---
-      eventDate: eventDateString,
-      eventTime: eventTimeString,
-      location,
-      description,
-      image: selectedImageUri,
-      category: selectedCategory,
-      tags: tags,
-      attendees: maxAttendees ? parseInt(maxAttendees, 10) : null,
-      // --- NEW: Use string values directly (handle optional fields) ---
-      offerEndsDate: offerEndDateString.trim() || null,
-      offerEndsTime: offerEndTimeString.trim() || null,
-      socialLinks: {
-        facebook: facebookUrl,
-        twitter: twitterUrl,
-        instagram: instagramUrl,
-        linkedin: linkedinUrl,
-        website: websiteUrl,
-      }
-    };
-
-    console.log('--- Event Data Submitted ---');
-    console.log(JSON.stringify(eventData, null, 2));
-    console.log('---------------------------');
-
     setLoading(true);
 
-    // Simulate backend submission
-    setTimeout(() => {
-      setLoading(false);
-      Alert.alert('Navigating...');
-      try {
-        router.push('/reg_form'); // Navigate
-      } catch (error) {
-        console.error('Navigation error after submit:', error);
-        Alert.alert('Navigation Error', 'Could not navigate to the next step.');
-      }
-    }, 1500);
+    try {
+      // Get the current user session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
+      if (sessionError || !sessionData?.session?.user) {
+        setLoading(false);
+        return Alert.alert('Authentication Error', 'Please sign in to create an event');
+      }
+
+      const userId = sessionData.session.user.id;
+
+      // Prepare social links object with only non-empty values
+      const socialLinks = {
+        ...(facebookUrl.trim() && { facebook: facebookUrl.trim() }),
+        ...(twitterUrl.trim() && { twitter: twitterUrl.trim() }),
+        ...(instagramUrl.trim() && { instagram: instagramUrl.trim() }),
+        ...(linkedinUrl.trim() && { linkedin: linkedinUrl.trim() }),
+        ...(websiteUrl.trim() && { website: websiteUrl.trim() })
+      };
+
+      const eventData = {
+        title: title.trim(),
+        description: description.trim(),
+        location: location.trim(),
+        category: selectedCategory,
+        tags,
+        eventDate: eventDateString.trim(),
+        eventTime: eventTimeString.trim(),
+        offerEndDate: offerEndDateString.trim() || null,
+        offerEndTime: offerEndTimeString.trim() || null,
+        maxAttendees: maxAttendees.trim() ? Number(maxAttendees.trim()) : null,
+        socialLinks,
+        bannerImage: selectedImageUri,
+        imageUrl
+      };
+      console.log('Event Data:', eventData); // Debugging log
+
+      // Call the initializeEvent function from functions.ts
+      const result = await initializeEvent(
+        userId,
+        title.trim(),
+        description.trim(),
+        eventDateString.trim(),
+        eventTimeString.trim(),
+        location.trim(),
+        selectedCategory,
+        tags,
+        socialLinks,
+        imageUrl // Use the public URL from Supabase instead of selectedImageUri
+      );
+
+      setLoading(false);
+
+      if (result === "success") {
+        Alert.alert(
+          'Success',
+          'Event created successfully! Now let\'s set up registration questions.',
+          [{ text: 'OK', onPress: () => router.push('/reg_form') }]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to create event. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
+      setLoading(false);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    }
   }, [
     title, description, location, selectedCategory, tags, maxAttendees,
-    // --- NEW: Update dependency array ---
     eventDateString, eventTimeString, offerEndDateString, offerEndTimeString,
     selectedImageUri,
     facebookUrl, twitterUrl, instagramUrl, linkedinUrl, websiteUrl, router
@@ -250,8 +286,8 @@ export default function CreateEvent() {
             onPress={pickImage}
             activeOpacity={0.7}
           >
-             {/* ... Banner Image/Placeholder ... */}
-             {selectedImageUri ? (
+            {/* ... Banner Image/Placeholder ... */}
+            {selectedImageUri ? (
               <Image
                 source={{ uri: selectedImageUri }}
                 style={styles.bannerImage}
@@ -294,21 +330,21 @@ export default function CreateEvent() {
           {/* Category Picker */}
           <Text style={styles.inputLabel}>Category *</Text>
           <View style={styles.pickerContainer}>
-             {/* ... Picker Code ... */}
-              <Picker
-                selectedValue={selectedCategory}
-                onValueChange={(itemValue, itemIndex) => setSelectedCategory(itemValue)}
-                style={styles.picker}
-                itemStyle={styles.pickerItem}
-                dropdownIconColor="#6366F1"
+            {/* ... Picker Code ... */}
+            <Picker
+              selectedValue={selectedCategory}
+              onValueChange={(itemValue, itemIndex) => setSelectedCategory(itemValue)}
+              style={styles.picker}
+              itemStyle={styles.pickerItem}
+              dropdownIconColor="#6366F1"
             >
-                {PREDEFINED_CATEGORIES.map((category, index) => (
-                    <Picker.Item key={index} label={category} value={category} />
-                ))}
+              {PREDEFINED_CATEGORIES.map((category, index) => (
+                <Picker.Item key={index} label={category} value={category} />
+              ))}
             </Picker>
           </View>
 
-         {/* Tag Input */}
+          {/* Tag Input */}
           <Text style={styles.inputLabel}>Tags (Optional)</Text>
           <View style={styles.inputContainer}>
             <TextInput
@@ -323,7 +359,7 @@ export default function CreateEvent() {
           </View>
           <View style={styles.tagsContainer}>
             {/* ... Tags display ... */}
-             {tags.map((tag, index) => (
+            {tags.map((tag, index) => (
               <View key={index} style={styles.tag}>
                 <Text style={styles.tagText}>{tag}</Text>
                 <TouchableOpacity onPress={() => handleRemoveTag(tag)} style={styles.removeTagButton}>
@@ -336,39 +372,39 @@ export default function CreateEvent() {
           {/* Featured Switch */}
         </View>
 
-         {/* --- Form Section 2: Date, Time, Location --- */}
+        {/* --- Form Section 2: Date, Time, Location --- */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>When & Where</Text>
 
-           {/* --- NEW: Event Date Input --- */}
-            <Text style={styles.inputLabel}>Event Date * (MM-DD-YYYY)</Text>
-            <View style={styles.inputContainer}>
-                <TextInput
-                    style={styles.input}
-                    value={eventDateString}
-                    onChangeText={setEventDateString}
-                    placeholder="MM-DD-YYYY"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="numeric" // Helps on mobile, not full validation
-                    maxLength={10} // MM/DD/YYYY
-                />
-                <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
-            </View>
+          {/* --- NEW: Event Date Input --- */}
+          <Text style={styles.inputLabel}>Event Date * (MM-DD-YYYY)</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={eventDateString}
+              onChangeText={setEventDateString}
+              placeholder="MM-DD-YYYY"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric" // Helps on mobile, not full validation
+              maxLength={10}
+            />
+            <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
+          </View>
 
-            {/* --- NEW: Event Time Input --- */}
-            <Text style={styles.inputLabel}>Event Time * (HH:MM AM/PM)</Text>
-             <View style={styles.inputContainer}>
-                <TextInput
-                    style={styles.input}
-                    value={eventTimeString}
-                    onChangeText={setEventTimeString}
-                    placeholder="e.g., 07:00 PM"
-                    placeholderTextColor="#9CA3AF"
-                    maxLength={8} // HH:MM AM
-                    autoCapitalize="characters" // Helps with AM/PM but user can still type lowercase
-                />
-                 <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
-            </View>
+          {/* --- NEW: Event Time Input --- */}
+          <Text style={styles.inputLabel}>Event Time * (HH:MM AM/PM)</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={eventTimeString}
+              onChangeText={setEventTimeString}
+              placeholder="e.g., 07:00 PM"
+              placeholderTextColor="#9CA3AF"
+              maxLength={8} // HH:MM AM
+              autoCapitalize="characters" // Helps with AM/PM but user can still type lowercase
+            />
+            <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
+          </View>
 
           {/* Location */}
           <Text style={styles.inputLabel}>Location *</Text>
@@ -386,76 +422,76 @@ export default function CreateEvent() {
         {/* --- Form Section 3: Offer Deadline --- */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Special Offer (Optional)</Text>
-          <Text style={[styles.headerSubtitle, {marginBottom: 16}]}>Set a deadline for early bird pricing or other promotions.</Text>
+          <Text style={[styles.headerSubtitle, { marginBottom: 16 }]}>Set a deadline for early bird pricing or other promotions.</Text>
 
           {/* --- NEW: Offer End Date Input --- */}
           <Text style={styles.inputLabel}>Offer Ends On (MM/DD/YYYY)</Text>
-           <View style={styles.inputContainer}>
-               <TextInput
-                    style={styles.input}
-                    value={offerEndDateString}
-                    onChangeText={setOfferEndDateString}
-                    placeholder="MM/DD/YYYY"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="numeric"
-                    maxLength={10}
-                />
-                 <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
-            </View>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={offerEndDateString}
+              onChangeText={setOfferEndDateString}
+              placeholder="MM/DD/YYYY"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+              maxLength={10}
+            />
+            <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
+          </View>
 
           {/* --- NEW: Offer End Time Input --- */}
           <Text style={styles.inputLabel}>Offer Ends At (HH:MM AM/PM)</Text>
-           <View style={styles.inputContainer}>
-               <TextInput
-                    style={styles.input}
-                    value={offerEndTimeString}
-                    onChangeText={setOfferEndTimeString}
-                    placeholder="e.g., 11:59 PM"
-                    placeholderTextColor="#9CA3AF"
-                    maxLength={8}
-                    autoCapitalize="characters"
-                />
-               <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
-           </View>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={offerEndTimeString}
+              onChangeText={setOfferEndTimeString}
+              placeholder="e.g., 11:59 PM"
+              placeholderTextColor="#9CA3AF"
+              maxLength={8}
+              autoCapitalize="characters"
+            />
+            <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
+          </View>
 
-           {/* Max Attendees */}
-            <Text style={styles.inputLabel}>Max Attendees (Optional)</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                onChangeText={setMaxAttendees}
-                value={maxAttendees}
-                placeholder="Limit number of attendees"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-              />
-            </View>
+          {/* Max Attendees */}
+          <Text style={styles.inputLabel}>Max Attendees (Optional)</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              onChangeText={setMaxAttendees}
+              value={maxAttendees}
+              placeholder="Limit number of attendees"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="numeric"
+            />
+          </View>
         </View>
 
         {/* --- Form Section 4: Social Links --- */}
         <View style={styles.formSection}>
-           <Text style={styles.sectionTitle}>Online Presence (Optional)</Text>
-           {/* ... Social Inputs ... */}
-           <Text style={styles.inputLabel}>Facebook URL</Text>
-            <View style={styles.inputContainer}>
-              <TextInput style={styles.input} onChangeText={setFacebookUrl} value={facebookUrl} placeholder="https://facebook.com/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
-            </View>
-             <Text style={styles.inputLabel}>Twitter/X URL</Text>
-            <View style={styles.inputContainer}>
-                <TextInput style={styles.input} onChangeText={setTwitterUrl} value={twitterUrl} placeholder="https://x.com/YourProfile" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
-            </View>
-            <Text style={styles.inputLabel}>Instagram URL</Text>
-             <View style={styles.inputContainer}>
-                <TextInput style={styles.input} onChangeText={setInstagramUrl} value={instagramUrl} placeholder="https://instagram.com/YourProfile" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
-            </View>
-            <Text style={styles.inputLabel}>LinkedIn URL</Text>
-             <View style={styles.inputContainer}>
-                 <TextInput style={styles.input} onChangeText={setLinkedInUrl} value={linkedinUrl} placeholder="https://linkedin.com/company/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
-            </View>
-             <Text style={styles.inputLabel}>Event Website URL</Text>
-             <View style={styles.inputContainer}>
-                 <TextInput style={styles.input} onChangeText={setWebsiteUrl} value={websiteUrl} placeholder="https://YourEventWebsite.com" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none"/>
-            </View>
+          <Text style={styles.sectionTitle}>Online Presence (Optional)</Text>
+          {/* ... Social Inputs ... */}
+          <Text style={styles.inputLabel}>Facebook URL</Text>
+          <View style={styles.inputContainer}>
+            <TextInput style={styles.input} onChangeText={setFacebookUrl} value={facebookUrl} placeholder="https://facebook.com/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+          </View>
+          <Text style={styles.inputLabel}>Twitter/X URL</Text>
+          <View style={styles.inputContainer}>
+            <TextInput style={styles.input} onChangeText={setTwitterUrl} value={twitterUrl} placeholder="https://x.com/YourProfile" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+          </View>
+          <Text style={styles.inputLabel}>Instagram URL</Text>
+          <View style={styles.inputContainer}>
+            <TextInput style={styles.input} onChangeText={setInstagramUrl} value={instagramUrl} placeholder="https://instagram.com/YourProfile" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+          </View>
+          <Text style={styles.inputLabel}>LinkedIn URL</Text>
+          <View style={styles.inputContainer}>
+            <TextInput style={styles.input} onChangeText={setLinkedInUrl} value={linkedinUrl} placeholder="https://linkedin.com/company/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+          </View>
+          <Text style={styles.inputLabel}>Event Website URL</Text>
+          <View style={styles.inputContainer}>
+            <TextInput style={styles.input} onChangeText={setWebsiteUrl} value={websiteUrl} placeholder="https://YourEventWebsite.com" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+          </View>
         </View>
 
         {/* --- Action Buttons --- */}
@@ -475,9 +511,9 @@ export default function CreateEvent() {
             activeOpacity={0.8}
           >
             {loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-                <Text style={styles.saveButtonText}>Next</Text>
+              <Text style={styles.saveButtonText}>Next</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -541,7 +577,7 @@ const styles = StyleSheet.create({
     color: '#374151',
     marginBottom: 8,
   },
-   inputLabelSwitch: { // Specific style for switch label alignment
+  inputLabelSwitch: { // Specific style for switch label alignment
     fontSize: 15,
     fontWeight: '500',
     color: '#374151',
@@ -583,19 +619,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   picker: {
-     height: Platform.OS === 'ios' ? 120 : 50,
-     width: '100%',
-     color: '#111827',
-     backgroundColor: Platform.OS === 'android' ? '#F9FAFB' : undefined,
+    height: Platform.OS === 'ios' ? 120 : 50,
+    width: '100%',
+    color: '#111827',
+    backgroundColor: Platform.OS === 'android' ? '#F9FAFB' : undefined,
   },
   pickerItem: {
-     // height: 120, // Example, might need adjustment
-     // fontSize: 18,
+    // height: 120, // Example, might need adjustment
+    // fontSize: 18,
   },
   dateText: { // This style is no longer needed for date/time display
-     // flex: 1,
-     // fontSize: 16,
-     // color: '#111827',
+    // flex: 1,
+    // fontSize: 16,
+    // color: '#111827',
   },
   pickerIcon: { // Keep this style for the icons next to the text inputs
     marginLeft: 8,

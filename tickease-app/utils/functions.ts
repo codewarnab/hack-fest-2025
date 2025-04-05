@@ -1,7 +1,6 @@
 import { supabase } from "@/utils/supabase"
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
 // Define a more specific type based on your table structure
 export interface UserProfile {
     name?: string;
@@ -81,7 +80,7 @@ const initializeEvent = async (
         youtube?: string;
         website?: string;
     },
-    image?: string,
+    imageUrl?: string,
 ) => {
     // Step 1: Get session
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -229,31 +228,40 @@ const createTickets = async (eventId: string, tickets: Ticket[]) => {
     return "success";
 };
 
-// Final Ticket Page Data(Fixed Fields + Promo Codes)-- -
-//         (NOBRIDGE) LOG[
-//             {
-//                 "id": "ticket_1743831527192",
-//                 "label": "Gdud",
-//                 "maxQuantity": 64,
-//                 "price": 5,
-//                 "description": "Bdhdhf",
-//                 "addonOptions": [
-//                     {
-//                         "id": "addon_1743831529068",
-//                         "label": "Hshd",
-//                         "price": 64,
-//                         "description": ""
-//                     },
-//                     {
-//                         "id": "addon_1743831539849",
-//                         "label": "",
-//                         "price": 0,
-//                         "description": ""
-//                     }
-//                 ]
-//             }
-//         ]
-//             (NOBRIDGE) LOG-------------------------------------------------------
+export const uploadImageToSupabase = async (imageFile) => {
+    try {
+        const fileName = `${Date.now()}_${imageFile.name}`; // 
+        const filePath = `event-banners/${fileName}`;
+
+        // Direct upload of the file/blob
+        const { data, error } = await supabase.storage
+            .from('img')
+            .upload(filePath, imageFile, {
+                contentType: imageFile.type,
+                upsert: true,
+            });
+        console.log('Upload data:', data);
+        console.log('Upload error:', error);
+
+        if (error) throw error;
+
+        const { data: publicUrlData } = supabase.storage
+            .from('img')
+            .getPublicUrl(filePath);
+
+        console.log('Public URL data:', publicUrlData);
+        return {
+            success: true,
+            publicUrl: publicUrlData.publicUrl,
+            filePath: filePath
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to upload image'
+        };
+    }
+};
 
 export { updateProfile, initializeEvent, updateEvent, createTickets };
 
