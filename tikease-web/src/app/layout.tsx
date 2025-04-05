@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "../components/ThemeProvider"
 import CookieConsent from "@/components/cookie-consent"
 import AnalyticsProvider from "@/components/analytics-provider"
+import UserCounter from "@/components/user-counter"
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable}  font-sans antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AnalyticsProvider>
+            <UserCounter />
             {children}
             <CookieConsent />
           </AnalyticsProvider>
