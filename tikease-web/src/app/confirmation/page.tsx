@@ -59,7 +59,7 @@ export default function ConfirmationPage() {
     // Show feedback survey after 5 seconds
     const timer = setTimeout(() => {
       setShowFeedbackSurvey(true)
-    }, 5000)
+    }, 1000)
 
     return () => clearTimeout(timer)
   }, [trackEvent])
