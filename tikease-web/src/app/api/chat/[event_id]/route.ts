@@ -24,7 +24,7 @@ const escalateToManager = tool({
     issueSummary: z
       .string()
       .describe(
-        "A concise summary of the user's complaint, issue, or request needing escalation.",
+        "A concise summary of the user's complaint, issue, or request needing escalation. minimum 30 string",
       ),
     priority: z
       .enum(["Low", "Medium", "Severe"])

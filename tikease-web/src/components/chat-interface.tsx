@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { SendIcon, User, Bot, AlertTriangle } from "lucide-react"; // Added icons
 
 export default function ChatInterface() {
+  let event_id = localStorage.getItem("EventId")  ; // Assuming event_id is passed as a prop or context
   const {
     messages,
     input,
@@ -19,7 +20,7 @@ export default function ChatInterface() {
     reload, // Function to retry last submission
     stop, // Function to stop generation
   } = useChat({
-    api: "/api/chat",
+    api: `/api/chat/${event_id}`,
     maxSteps: 5, // Keep consistent with backend
     initialMessages: [
       {
