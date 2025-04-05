@@ -1,283 +1,688 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
+import React, { useState, useCallback, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
   ScrollView,
-  Alert
+  Alert,
+  Switch,
+  Platform,
+  KeyboardAvoidingView,
+  ActivityIndicator,
+  Pressable, // Keep Pressable if needed elsewhere, but not for date inputs
 } from 'react-native';
 import { router } from 'expo-router';
+import { FontAwesome, MaterialIcons } from '@expo/vector-icons'; // For icons
+// REMOVE: import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image'; // Use Expo Image
+
+// --- Constants ---
+const PREDEFINED_CATEGORIES = [
+  'Technology', 'Music', 'Art', 'Business', 'Food & Drink', 'Health', 'Sports', 'Other'
+];
+
+// --- Helper Function for URL Validation ---
+const isValidUrl = (url:string) => {
+  if (!url) return true; // Allow empty fields
+  try {
+    const pattern = new RegExp('^(https?:\\/\\/)'+ // protocol
+      '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|'+ // domain name
+      '((\\d{1,3}\\.){3}\\d{1,3}))'+ // OR ip (v4) address
+      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*'+ // port and path
+      '(\\?[;&a-z\\d%_.~+=-]*)?'+ // query string
+      '(\\#[-a-z\\d_]*)?$','i'); // fragment locator
+    return !!pattern.test(url);
+  } catch (e) {
+    return false;
+  }
+};
 
 export default function CreateEvent() {
-  const [eventTitle, setEventTitle] = useState('');
-  const [eventDescription, setEventDescription] = useState('');
-  const [bannerSelected, setBannerSelected] = useState(false);
-  
-  // Ticket data
-  const [totalTickets, setTotalTickets] = useState('');
-  const [vipTickets, setVipTickets] = useState('');
-  const [generalTickets, setGeneralTickets] = useState('');
-  const [vipPrice, setVipPrice] = useState('');
-  const [generalPrice, setGeneralPrice] = useState('');
-  
+  // --- State Management ---
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [location, setLocation] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(PREDEFINED_CATEGORIES[0]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [currentTagInput, setCurrentTagInput] = useState('');
+  const [maxAttendees, setMaxAttendees] = useState('');
+
+  // --- NEW: Date & Time State as Strings ---
+  const [eventDateString, setEventDateString] = useState('');
+  const [eventTimeString, setEventTimeString] = useState('');
+  const [offerEndDateString, setOfferEndDateString] = useState('');
+  const [offerEndTimeString, setOfferEndTimeString] = useState('');
+
+  // REMOVE: Picker Visibility State
+  // const [showPicker, setShowPicker] = useState(false);
+  // const [pickerMode, setPickerMode] = useState('date');
+  // const [currentPickerTarget, setCurrentPickerTarget] = useState('eventDate');
+
+  // Social Links State
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [twitterUrl, setTwitterUrl] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [linkedinUrl, setLinkedInUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+
+  // Banner State
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
 
-  const pickImage = () => {
-    // Simplified image selection to avoid ImagePicker dependency issues
-    setBannerSelected(true);
-    Alert.alert('Image Selection', 'Banner would be selected here');
+  // --- Permissions ---
+  useEffect(() => {
+    (async () => {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to make this work!');
+        }
+      }
+    })();
+  }, []);
+
+  // --- Handlers ---
+
+  // REMOVE: Date/Time Picker Handlers
+  // const showMode = (modeToShow, target) => { ... };
+  // const onPickerChange = (event, selectedValue) => { ... };
+
+  // Image Picker Handler
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setSelectedImageUri(result.assets[0].uri);
+    } else {
+       Alert.alert('Image Selection', 'You did not select any image.');
+    }
   };
 
-  const handleSubmit = () => {
-    // Validate inputs
-    if (!eventTitle.trim()) {
-      Alert.alert('Missing Information', 'Please enter an event title');
-      return;
+  // Tag Input Handlers
+  const handleAddTag = () => {
+    const newTag = currentTagInput.trim();
+    if (newTag && !tags.includes(newTag)) {
+      setTags([...tags, newTag]);
     }
-    
-    if (!eventDescription.trim()) {
-      Alert.alert('Missing Information', 'Please enter an event description');
-      return;
-    }
-    
-   
-    
-  
-    
+    setCurrentTagInput('');
+  };
+
+  interface TagHandlerProps {
+    tagToRemove: string;
+  }
+
+  const handleRemoveTag = (tagToRemove: TagHandlerProps['tagToRemove']) => {
+    setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  // Submit Handler
+  const handleSubmit = useCallback(() => {
+    // --- Validation ---
+    if (!title.trim()) return Alert.alert('Missing Info', 'Event title is required.');
+    if (!description.trim()) return Alert.alert('Missing Info', 'Event description is required.');
+    if (!location.trim()) return Alert.alert('Missing Info', 'Event location is required.');
+    if (!selectedCategory || selectedCategory === 'Select a Category...') return Alert.alert('Missing Info', 'Please select an event category.');
+    if (!selectedImageUri) return Alert.alert('Missing Info', 'Event banner image is required.');
+
+    // --- NEW: Date/Time String Validation ---
+    if (!eventDateString.trim()) return Alert.alert('Missing Info', 'Event Date is required.');
+    if (!eventTimeString.trim()) return Alert.alert('Missing Info', 'Event Time is required.');
+    // Optional: Add more specific format validation (e.g., regex) here if needed
+    // Example simple format check (adjust regex as needed):
+    // const dateRegex = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/;
+    // if (!dateRegex.test(eventDateString)) return Alert.alert('Invalid Format', 'Please enter Event Date as MM/DD/YYYY.');
+    // const timeRegex = /^(0[1-9]|1[0-2]):([0-5]\d) (AM|PM)$/i;
+    // if (!timeRegex.test(eventTimeString)) return Alert.alert('Invalid Format', 'Please enter Event Time as HH:MM AM/PM.');
+
+    if (maxAttendees.trim() && isNaN(Number(maxAttendees))) return Alert.alert('Invalid Info', 'Max attendees must be a number.');
+
+    // Basic URL Validation
+    if (!isValidUrl(facebookUrl)) return Alert.alert('Invalid URL', 'Please enter a valid Facebook URL (starting with http/https).');
+    if (!isValidUrl(twitterUrl)) return Alert.alert('Invalid URL', 'Please enter a valid Twitter/X URL.');
+    if (!isValidUrl(instagramUrl)) return Alert.alert('Invalid URL', 'Please enter a valid Instagram URL.');
+    if (!isValidUrl(linkedinUrl)) return Alert.alert('Invalid URL', 'Please enter a valid LinkedIn URL.');
+    if (!isValidUrl(websiteUrl)) return Alert.alert('Invalid URL', 'Please enter a valid Website URL.');
+
+    // --- Data Consolidation ---
+    // REMOVE: Combining Date objects
+    // const eventStartDateTime = new Date(...);
+    // const offerEndDateTime = new Date(...);
+
+    const eventData = {
+      title,
+      // --- NEW: Use string values directly ---
+      eventDate: eventDateString,
+      eventTime: eventTimeString,
+      location,
+      description,
+      image: selectedImageUri,
+      category: selectedCategory,
+      tags: tags,
+      attendees: maxAttendees ? parseInt(maxAttendees, 10) : null,
+      // --- NEW: Use string values directly (handle optional fields) ---
+      offerEndsDate: offerEndDateString.trim() || null,
+      offerEndsTime: offerEndTimeString.trim() || null,
+      socialLinks: {
+        facebook: facebookUrl,
+        twitter: twitterUrl,
+        instagram: instagramUrl,
+        linkedin: linkedinUrl,
+        website: websiteUrl,
+      }
+    };
+
+    console.log('--- Event Data Submitted ---');
+    console.log(JSON.stringify(eventData, null, 2));
+    console.log('---------------------------');
+
     setLoading(true);
-    
-    // Here you would normally submit the data to your backend
+
+    // Simulate backend submission
     setTimeout(() => {
       setLoading(false);
-        router.push('/landing_form2'); // Navigate to the next step
+      Alert.alert('Navigating...');
+      try {
+        router.push('/reg_form'); // Navigate
+      } catch (error) {
+        console.error('Navigation error after submit:', error);
+        Alert.alert('Navigation Error', 'Could not navigate to the next step.');
+      }
     }, 1500);
+
+  }, [
+    title, description, location, selectedCategory, tags, maxAttendees,
+    // --- NEW: Update dependency array ---
+    eventDateString, eventTimeString, offerEndDateString, offerEndTimeString,
+    selectedImageUri,
+    facebookUrl, twitterUrl, instagramUrl, linkedinUrl, websiteUrl, router
+  ]);
+
+  // Cancel Handler
+  const handleCancel = () => {
+    try {
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/');
+      }
+    } catch (error) {
+      console.error('Navigation error on cancel:', error);
+      Alert.alert('Navigation Error', 'Could not go back');
+    }
   };
 
+  // --- Render ---
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>Create New Event</Text>
-        <Text style={styles.headerSubtitle}>Fill in the details to create your event</Text>
-      </View>
-      
-      <View style={styles.formContainer}>
-        <TouchableOpacity 
-          style={styles.bannerContainer} 
-          onPress={pickImage}
-        >
-          {bannerSelected ? (
-            <View style={styles.selectedBannerPlaceholder}>
-              <Text style={styles.bannerPlaceholderText}>Banner Selected</Text>
-            </View>
-          ) : (
-            <View style={styles.addBannerContent}>
-              <Text style={styles.addBannerIcon}>+</Text>
-              <Text style={styles.addBannerText}>ADD THUMBNAIL</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        
-        <Text style={styles.inputLabel}>Event Title</Text>
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            onChangeText={setEventTitle}
-            value={eventTitle}
-            placeholder="Enter Event Title"
-          />
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+    >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* --- Header --- */}
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerTitle}>Create New Event</Text>
+          <Text style={styles.headerSubtitle}>Provide details for your awesome event</Text>
         </View>
-        
-        <Text style={styles.inputLabel}>Event Description</Text>
-        <View style={[styles.inputContainer, styles.textAreaContainer]}>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            onChangeText={setEventDescription}
-            value={eventDescription}
-            placeholder="Enter Event Description"
-            multiline
-            numberOfLines={4}
-          />
+
+        {/* --- Form Section 1: Core Details --- */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>Event Details</Text>
+
+          {/* Banner */}
+          <Text style={styles.inputLabel}>Event Banner *</Text>
+          <TouchableOpacity
+            style={styles.bannerContainer}
+            onPress={pickImage}
+            activeOpacity={0.7}
+          >
+             {/* ... Banner Image/Placeholder ... */}
+             {selectedImageUri ? (
+              <Image
+                source={{ uri: selectedImageUri }}
+                style={styles.bannerImage}
+                contentFit="cover"
+                transition={300}
+              />
+            ) : (
+              <View style={styles.addBannerContent}>
+                <MaterialIcons name="add-photo-alternate" size={40} color="#6366F1" />
+                <Text style={styles.addBannerText}>TAP TO ADD BANNER</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Title */}
+          <Text style={styles.inputLabel}>Event Title *</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              onChangeText={setTitle}
+              value={title}
+              placeholder="e.g., Innovation Summit 2025"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+
+          {/* Description */}
+          <Text style={styles.inputLabel}>Event Description *</Text>
+          <View style={[styles.inputContainer, styles.textAreaContainer]}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              onChangeText={setDescription}
+              value={description}
+              placeholder="Tell attendees about your event..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+            />
+          </View>
+
+          {/* Category Picker */}
+          <Text style={styles.inputLabel}>Category *</Text>
+          <View style={styles.pickerContainer}>
+             {/* ... Picker Code ... */}
+              <Picker
+                selectedValue={selectedCategory}
+                onValueChange={(itemValue, itemIndex) => setSelectedCategory(itemValue)}
+                style={styles.picker}
+                itemStyle={styles.pickerItem}
+                dropdownIconColor="#6366F1"
+            >
+                {PREDEFINED_CATEGORIES.map((category, index) => (
+                    <Picker.Item key={index} label={category} value={category} />
+                ))}
+            </Picker>
+          </View>
+
+         {/* Tag Input */}
+          <Text style={styles.inputLabel}>Tags (Optional)</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={currentTagInput}
+              onChangeText={setCurrentTagInput}
+              placeholder="Type a tag and press enter..."
+              placeholderTextColor="#9CA3AF"
+              onSubmitEditing={handleAddTag}
+              blurOnSubmit={false}
+            />
+          </View>
+          <View style={styles.tagsContainer}>
+            {/* ... Tags display ... */}
+             {tags.map((tag, index) => (
+              <View key={index} style={styles.tag}>
+                <Text style={styles.tagText}>{tag}</Text>
+                <TouchableOpacity onPress={() => handleRemoveTag(tag)} style={styles.removeTagButton}>
+                  <MaterialIcons name="close" size={14} color="#4F46E5" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          {/* Featured Switch */}
         </View>
-        
-      
-      </View>
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={() => {
-            try {
-              router.back();
-            } catch (error) {
-              console.error('Navigation error:', error);
-              Alert.alert('Navigation Error', 'Could not go back');
-            }
-          }}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.button, styles.saveButton, loading && styles.disabledButton]}
-          onPress={handleSubmit}
-          disabled={loading}
-        >
-          <Text style={styles.saveButtonText}>
-            {loading ? 'saving...' : 'Next'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+         {/* --- Form Section 2: Date, Time, Location --- */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>When & Where</Text>
+
+           {/* --- NEW: Event Date Input --- */}
+            <Text style={styles.inputLabel}>Event Date * (MM-DD-YYYY)</Text>
+            <View style={styles.inputContainer}>
+                <TextInput
+                    style={styles.input}
+                    value={eventDateString}
+                    onChangeText={setEventDateString}
+                    placeholder="MM-DD-YYYY"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric" // Helps on mobile, not full validation
+                    maxLength={10} // MM/DD/YYYY
+                />
+                <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
+            </View>
+
+            {/* --- NEW: Event Time Input --- */}
+            <Text style={styles.inputLabel}>Event Time * (HH:MM AM/PM)</Text>
+             <View style={styles.inputContainer}>
+                <TextInput
+                    style={styles.input}
+                    value={eventTimeString}
+                    onChangeText={setEventTimeString}
+                    placeholder="e.g., 07:00 PM"
+                    placeholderTextColor="#9CA3AF"
+                    maxLength={8} // HH:MM AM
+                    autoCapitalize="characters" // Helps with AM/PM but user can still type lowercase
+                />
+                 <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
+            </View>
+
+          {/* Location */}
+          <Text style={styles.inputLabel}>Location *</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              onChangeText={setLocation}
+              value={location}
+              placeholder="e.g., Grand Hall, City Center"
+              placeholderTextColor="#9CA3AF"
+            />
+          </View>
+        </View>
+
+        {/* --- Form Section 3: Offer Deadline --- */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionTitle}>Special Offer (Optional)</Text>
+          <Text style={[styles.headerSubtitle, {marginBottom: 16}]}>Set a deadline for early bird pricing or other promotions.</Text>
+
+          {/* --- NEW: Offer End Date Input --- */}
+          <Text style={styles.inputLabel}>Offer Ends On (MM/DD/YYYY)</Text>
+           <View style={styles.inputContainer}>
+               <TextInput
+                    style={styles.input}
+                    value={offerEndDateString}
+                    onChangeText={setOfferEndDateString}
+                    placeholder="MM/DD/YYYY"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                    maxLength={10}
+                />
+                 <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
+            </View>
+
+          {/* --- NEW: Offer End Time Input --- */}
+          <Text style={styles.inputLabel}>Offer Ends At (HH:MM AM/PM)</Text>
+           <View style={styles.inputContainer}>
+               <TextInput
+                    style={styles.input}
+                    value={offerEndTimeString}
+                    onChangeText={setOfferEndTimeString}
+                    placeholder="e.g., 11:59 PM"
+                    placeholderTextColor="#9CA3AF"
+                    maxLength={8}
+                    autoCapitalize="characters"
+                />
+               <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
+           </View>
+
+           {/* Max Attendees */}
+            <Text style={styles.inputLabel}>Max Attendees (Optional)</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                onChangeText={setMaxAttendees}
+                value={maxAttendees}
+                placeholder="Limit number of attendees"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numeric"
+              />
+            </View>
+        </View>
+
+        {/* --- Form Section 4: Social Links --- */}
+        <View style={styles.formSection}>
+           <Text style={styles.sectionTitle}>Online Presence (Optional)</Text>
+           {/* ... Social Inputs ... */}
+           <Text style={styles.inputLabel}>Facebook URL</Text>
+            <View style={styles.inputContainer}>
+              <TextInput style={styles.input} onChangeText={setFacebookUrl} value={facebookUrl} placeholder="https://facebook.com/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+            </View>
+             <Text style={styles.inputLabel}>Twitter/X URL</Text>
+            <View style={styles.inputContainer}>
+                <TextInput style={styles.input} onChangeText={setTwitterUrl} value={twitterUrl} placeholder="https://x.com/YourProfile" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+            </View>
+            <Text style={styles.inputLabel}>Instagram URL</Text>
+             <View style={styles.inputContainer}>
+                <TextInput style={styles.input} onChangeText={setInstagramUrl} value={instagramUrl} placeholder="https://instagram.com/YourProfile" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+            </View>
+            <Text style={styles.inputLabel}>LinkedIn URL</Text>
+             <View style={styles.inputContainer}>
+                 <TextInput style={styles.input} onChangeText={setLinkedInUrl} value={linkedinUrl} placeholder="https://linkedin.com/company/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
+            </View>
+             <Text style={styles.inputLabel}>Event Website URL</Text>
+             <View style={styles.inputContainer}>
+                 <TextInput style={styles.input} onChangeText={setWebsiteUrl} value={websiteUrl} placeholder="https://YourEventWebsite.com" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none"/>
+            </View>
+        </View>
+
+        {/* --- Action Buttons --- */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={handleCancel}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.saveButton, loading && styles.disabledButton]}
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+                <Text style={styles.saveButtonText}>Next</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* REMOVE: DateTimePicker Modal */}
+        {/* {showPicker && ( ... )} */}
+
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
+// --- Styles --- (Keep the styles as they were, they should adapt fine)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#EBF0FF',
-    padding: 24,
+    backgroundColor: '#F8F9FE',
+  },
+  scrollContentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 80, // More bottom padding for scroll
   },
   headerContainer: {
-    marginTop: 48,
-    marginBottom: 32,
+    marginTop: Platform.OS === 'ios' ? 40 : 20,
+    marginBottom: 24,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 28, // Increased size slightly
     fontWeight: 'bold',
-    color: '#333',
+    color: '#111827', // Darker
     marginBottom: 8,
   },
   headerSubtitle: {
-    fontSize: 18,
-    color: '#666',
+    fontSize: 16,
+    color: '#6B7280',
   },
-  formContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
+  formSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    marginBottom: 24,
+    shadowColor: '#9CA3AF', // Adjusted shadow color
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 16,
+    shadowRadius: 5,
+    elevation: 4,
   },
-  bannerContainer: {
-    height: 200,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DDD',
-    marginBottom: 20,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addBannerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addBannerIcon: {
-    fontSize: 40,
-    color: '#6366F1',
-  },
-  addBannerText: {
-    marginTop: 8,
-    color: '#6366F1',
-    fontWeight: '500',
-  },
-  selectedBannerPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#e0e0ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bannerPlaceholderText: {
-    fontSize: 18,
-    color: '#6366F1',
-    fontWeight: '500',
+  sectionTitle: {
+    fontSize: 20, // Slightly larger section title
+    fontWeight: '600',
+    color: '#4F46E5', // Indigo for titles
+    marginBottom: 18,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 15, // Slightly larger labels
     fontWeight: '500',
-    color: '#444',
+    color: '#374151',
     marginBottom: 8,
   },
+   inputLabelSwitch: { // Specific style for switch label alignment
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#374151',
+  },
   inputContainer: {
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
+    borderColor: '#D1D5DB',
+    borderRadius: 10, // More rounded inputs
+    paddingHorizontal: 14, // More padding
+    marginBottom: 18, // Increased margin
+    minHeight: 50, // Standard height
+    flexDirection: 'row', // For icon alignment
+    alignItems: 'center', // Center items vertically
   },
   input: {
+    flex: 1, // Input takes remaining space
     fontSize: 16,
-    color: '#333',
+    color: '#111827',
+    paddingVertical: 10, // Ensure consistent padding inside input
   },
   textAreaContainer: {
-    minHeight: 100,
+    minHeight: 120,
+    paddingVertical: 12,
+    alignItems: 'flex-start', // Align text to top
   },
   textArea: {
+    height: 100, // Fixed height
     textAlignVertical: 'top',
+    paddingVertical: 0, // Reset padding for multiline
   },
-  ticketContainer: {
-    padding: 16,
+  pickerContainer: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    marginBottom: 18,
+    minHeight: 50,
+    justifyContent: 'center',
   },
-  ticketInfoHeader: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#6366F1',
-    marginBottom: 12,
+  picker: {
+     height: Platform.OS === 'ios' ? 120 : 50,
+     width: '100%',
+     color: '#111827',
+     backgroundColor: Platform.OS === 'android' ? '#F9FAFB' : undefined,
   },
-  ticketRow: {
+  pickerItem: {
+     // height: 120, // Example, might need adjustment
+     // fontSize: 18,
+  },
+  dateText: { // This style is no longer needed for date/time display
+     // flex: 1,
+     // fontSize: 16,
+     // color: '#111827',
+  },
+  pickerIcon: { // Keep this style for the icons next to the text inputs
+    marginLeft: 8,
+  },
+  switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginTop: 10,
+    marginBottom: 18,
+    paddingVertical: 8,
   },
-  ticketLabel: {
-    fontSize: 14,
-    color: '#666',
-    flex: 2,
+  bannerContainer: {
+    height: 180,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    borderStyle: 'dashed',
+    borderWidth: 2,
+    borderColor: '#9CA3AF',
+    marginBottom: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
-  ticketInput: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  addBannerContent: {
+    alignItems: 'center',
+    opacity: 0.8,
+  },
+  addBannerText: {
+    marginTop: 10,
+    color: '#6366F1',
+    fontWeight: '500',
     fontSize: 14,
-    flex: 1,
-    textAlign: 'right',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
+  tag: {
+    flexDirection: 'row',
+    backgroundColor: '#E0E7FF',
+    borderRadius: 15,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginRight: 8,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  tagText: {
+    color: '#4F46E5',
+    fontSize: 13,
+    marginRight: 5,
+  },
+  removeTagButton: {
+    marginLeft: 4,
+    padding: 2,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 40,
+    marginTop: 32,
+    marginBottom: Platform.OS === 'ios' ? 30 : 50,
+    gap: 16,
   },
   button: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 15,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
-    marginRight: 8,
+    backgroundColor: '#F3F4F6',
   },
   cancelButtonText: {
-    color: '#666',
+    color: '#4B5563',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   saveButton: {
     backgroundColor: '#6366F1',
-    marginLeft: 8,
   },
   saveButtonText: {
     color: 'white',
@@ -285,6 +690,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   disabledButton: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
 });
