@@ -36,7 +36,7 @@ export default function ChatbotButton() {
             </Button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <ChatInterface />
+            <ChatInterface  />
           </div>
         </Card>
       )}

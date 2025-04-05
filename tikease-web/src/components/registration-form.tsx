@@ -195,6 +195,11 @@ export default function RegistrationForm() {
   const [formStartTime, setFormStartTime] = useState(Date.now());
   const [eventId, setEventId] = useState<string | null>(null); // For storing event ID
   
+  // Add state for address suggestions
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{description: string; place_id: string}>>([]);
+  const [isLoadingAddressSuggestions, setIsLoadingAddressSuggestions] = useState(false);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  
   interface Location {
     city: string;
     country: string;
@@ -334,6 +339,51 @@ useEffect(() => {
 
   const currentStepFields = dynamicFormFields.find(step => step.step === currentStep);
   const currentStepSchema = createStepSchema(currentStepFields?.fields || []);
+
+  // Add a function to fetch address suggestions
+  const fetchAddressSuggestions = async (query: string) => {
+    if (query.length < 3) return; // Only fetch if user has typed at least 3 characters
+    
+    setIsLoadingAddressSuggestions(true);
+    try {
+      const response = await fetch('/api/address', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query }),
+      });
+      
+      const data = await response.json();
+      if (data.predictions) {
+        // Only show up to 3 suggestions
+        setAddressSuggestions(data.predictions.slice(0, 3));
+        setShowAddressSuggestions(true);
+      }
+    } catch (error) {
+      console.error('Error fetching address suggestions:', error);
+    } finally {
+      setIsLoadingAddressSuggestions(false);
+    }
+  };
+
+  // Add a debounce function to avoid too many API calls
+  const debouncedFetchSuggestions = (query: string) => {
+
+      fetchAddressSuggestions(query);
+  };
+
+  // Handle suggestion selection
+  const handleSelectAddress = (suggestion: {description: string; place_id: string}) => {
+    form.setValue('address', suggestion.description);
+    setShowAddressSuggestions(false);
+    
+    // Track selection event
+    trackEvent('address_suggestion_selected', {
+      place_id: suggestion.place_id,
+      description: suggestion.description,
+    });
+  };
 
   // Handle next button click - validate only current step fields
   const handleNext = async () => {
@@ -592,10 +642,37 @@ useEffect(() => {
                   {fieldConfig.required && <span className="text-red-500">*</span>}
                 </FormLabel>
                 <FormControl>
-                  <Input placeholder={fieldConfig.placeholder} type={fieldConfig.type} {...field} />
+                  <Input 
+                    placeholder={fieldConfig.placeholder} 
+                    type={fieldConfig.type} 
+                    {...field} 
+                    onChange={(e) => {
+                      field.onChange(e);
+                      if (fieldConfig.name === "address") {
+                        debouncedFetchSuggestions(e.target.value);
+                      }
+                    }}
+                  />
                 </FormControl>
                 {fieldConfig.description && <FormDescription>{fieldConfig.description}</FormDescription>}
                 <FormMessage />
+                {fieldConfig.name === "address" && showAddressSuggestions && (
+                  <div className="mt-2 bg-grey border rounded shadow">
+                    {isLoadingAddressSuggestions ? (
+                      <p className="p-2 text-sm text-muted-foreground">Loading suggestions...</p>
+                    ) : (
+                      addressSuggestions.map((suggestion) => (
+                        <div
+                          key={suggestion.place_id}
+                          className="p-2 text-sm cursor-pointer hover:bg-muted"
+                          onClick={() => handleSelectAddress(suggestion)}
+                        >
+                          {suggestion.description}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </FormItem>
             )}
           />
