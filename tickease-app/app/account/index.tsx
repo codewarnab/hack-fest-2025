@@ -6,9 +6,11 @@ import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import updateProfile, { UserProfile } from '@/utils/functions';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Account() {
     const session = useSession();
+    const insets = useSafeAreaInsets(); // Get safe area insets
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState('');
     const [organizion_name, setOrganizationName] = useState('');
@@ -132,7 +134,7 @@ export default function Account() {
 
     return (
         <ScrollView style={styles.container}>
-            <View style={styles.header}>
+            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <Text style={styles.headerTitle}>Organizer Profile</Text>
                 <TouchableOpacity onPress={signOut} style={styles.signOutButton}>
                     <Ionicons name="log-out-outline" size={22} color="#fff" />
@@ -273,12 +275,19 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: '#6366F1',
-        paddingVertical: 20,
-        paddingHorizontal: 16,
-        marginBottom: 20,
+        paddingBottom: 24,
+        paddingHorizontal: 20,
+        marginBottom: 24,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#6366F1',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: 'bold',
         color: '#FFF',
     },
@@ -286,14 +295,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 20,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 25,
     },
     signOutText: {
-        marginLeft: 4,
+        marginLeft: 6,
         color: '#FFF',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     card: {
         backgroundColor: '#FFFFFF',

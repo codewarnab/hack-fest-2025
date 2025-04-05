@@ -1,11 +1,19 @@
+import React from 'react';
+import { StyleSheet } from 'react-native';
+import { ThemedView } from "@/components/ThemedView";
+import Account from '../account/index'; // Import the Account component
 
-import React from 'react'
-import Account from '../account'
-
-const Hmm = () => {
+export default function AccountScreen() {
+  // Render the Account component directly
   return (
-    <Account />
-  )
+    <ThemedView style={styles.container}>
+      <Account />
+    </ThemedView>
+  );
 }
 
-export default Hmm
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});

@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function MyEvents() {
+    const insets = useSafeAreaInsets();
     const [events, setEvents] = useState<{ id: string; title: string; date: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -34,8 +37,7 @@ export default function MyEvents() {
     }
 
     const navigateToCreateEvent = () => {
-        router.push('/landing_form'); // ✅ forces the literal string
-
+        router.push('/landing_form');
     };
 
     const EventItem = ({ event  } : any ) => (
@@ -49,12 +51,19 @@ export default function MyEvents() {
     );
 
     return (
-        <View style={styles.container}>
-            <View style={styles.headerContainer}>
+        <ScrollView style={styles.container}>
+            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <Text style={styles.headerTitle}>My Events</Text>
+                <TouchableOpacity 
+                    style={styles.refreshButton}
+                    onPress={fetchEvents}
+                >
+                    <Ionicons name="refresh-outline" size={22} color="#fff" />
+                    <Text style={styles.refreshText}>Refresh</Text>
+                </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.eventsContainer}>
+            <View style={styles.eventsContainer}>
                 {events.length > 0 ? (
                     events.map((event) => (
                         <EventItem key={event.id} event={event} />
@@ -66,7 +75,7 @@ export default function MyEvents() {
                         </Text>
                     </View>
                 )}
-            </ScrollView>
+            </View>
 
             <View style={styles.fabContainer}>
                 <View style={styles.fabTooltipContainer}>
@@ -79,28 +88,52 @@ export default function MyEvents() {
                     <Text style={styles.fabIcon}>+</Text>
                 </TouchableOpacity>
             </View>
-        </View>
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#EBF0FF',
-        padding: 24,
+        backgroundColor: '#F5F7FF',
     },
-    headerContainer: {
-        marginTop: 48,
-        marginBottom: 32,
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: '#6366F1',
+        paddingBottom: 24,
+        paddingHorizontal: 20,
+        marginBottom: 24,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#6366F1',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 5,
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 26,
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
+        color: '#FFF',
+    },
+    refreshButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 25,
+    },
+    refreshText: {
+        marginLeft: 6,
+        color: '#FFF',
+        fontWeight: '600',
     },
     eventsContainer: {
         flex: 1,
+        paddingHorizontal: 20,
         marginBottom: 80, // Space for the FAB
     },
     eventCard: {
@@ -143,41 +176,47 @@ const styles = StyleSheet.create({
     },
     fabContainer: {
         position: 'absolute',
-        right: 30,
-        bottom: 40,
+        right: 25,
+        bottom: -300, // Position above the navbar
         alignItems: 'center',
+        zIndex: 999, // Ensure it stays above other elements
     },
     fabTooltipContainer: {
-        backgroundColor: 'white',
-        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 12,
         padding: 10,
-        marginBottom: 10,
+        marginBottom: 8,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+        maxWidth: 160,
     },
     fabTooltipText: {
-        fontSize: 14,
+        fontSize: 13,
+        textAlign: 'center',
         color: '#333',
     },
     fab: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 64,
+        height: 64, // Slightly larger for easier tapping
+        borderRadius: 32,
         backgroundColor: '#6366F1',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#000',
+        shadowColor: '#6366F1',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 6,
-        elevation: 5,
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.2)', // Subtle border for depth
     },
     fabIcon: {
-        fontSize: 30,
+        fontSize: 32,
         color: 'white',
         fontWeight: 'bold',
+        marginTop: -2, // Center the + symbol visually
     },
 });
