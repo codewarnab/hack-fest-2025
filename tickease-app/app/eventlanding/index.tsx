@@ -8,8 +8,9 @@ import NotificationComponent from '../notif/index';
 
 export default function MyEvents() {
     const insets = useSafeAreaInsets();
-    const [events, setEvents] = useState<{ id: string; title: string; date: string }[]>([]);
+    const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
+
 
     useEffect(() => {
         fetchEvents();
@@ -18,13 +19,13 @@ export default function MyEvents() {
     async function fetchEvents() {
         try {
             setLoading(true);
-            
+
             // Example query - you'll need to adjust this based on your Supabase schema
             const { data, error } = await supabase
                 .from('events')
                 .select('*')
                 .order('created_at', { ascending: false });
-                
+
             if (error) {
                 console.error('Error fetching events:', error);
             } else {
@@ -41,8 +42,8 @@ export default function MyEvents() {
         router.push('/landing_form');
     };
 
-    const EventItem = ({ event }: any) => (
-        <TouchableOpacity 
+    const EventItem = ({ event }) => (
+        <TouchableOpacity
             style={styles.eventCard}
             onPress={() => router.push(`/account`)}
         >
@@ -68,8 +69,8 @@ export default function MyEvents() {
                     <View style={styles.eventMetaRow}>
                         <Ionicons name="calendar-outline" size={14} color="#6366F1" />
                         <Text style={styles.eventMeta} numberOfLines={1}>
-                            {event.date 
-                                ? new Date(event.date).toLocaleDateString() 
+                            {event.date
+                                ? new Date(event.date).toLocaleDateString()
                                 : 'Date to be announced'}
                         </Text>
                     </View>
@@ -82,10 +83,10 @@ export default function MyEvents() {
                 </View>
             </View>
             <View style={styles.eventCardFooter}>
-                <View style={[styles.eventStatus, 
-                    event.status === 'completed' 
-                        ? styles.eventStatusCompleted 
-                        : styles.eventStatusUpcoming
+                <View style={[styles.eventStatus,
+                event.status === 'completed'
+                    ? styles.eventStatusCompleted
+                    : styles.eventStatusUpcoming
                 ]}>
                     <Text style={styles.eventStatusText}>
                         {event.status === 'completed' ? 'Completed' : 'Upcoming'}
@@ -99,45 +100,58 @@ export default function MyEvents() {
     );
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <Text style={styles.headerTitle}>My Events</Text>
-                <NotificationComponent />
-            </View>
+        <View style={styles.mainContainer}>
+            <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+                <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+                    <Text style={styles.headerTitle}>My Events</Text>
+                    <NotificationComponent />
+                </View>
 
-            <View style={styles.eventsContainer}>
-                {events.length > 0 ? (
-                    events.map((event) => (
-                        <EventItem key={event.id} event={event} />
-                    ))
-                ) : (
-                    <View style={styles.noEventsContainer}>
-                        <Text style={styles.noEventsText}>
-                            {loading ? 'Loading events...' : 'No events found. Create one!'}
-                        </Text>
-                    </View>
-                )}
-            </View>
+                <View style={styles.eventsContainer}>
+                    {events.length > 0 ? (
+                        events.map((event) => (
+                            <EventItem key={event.id} event={event} />
+                        ))
+                    ) : (
+                        <View style={styles.noEventsContainer}>
+                            <Text style={styles.noEventsText}>
+                                {loading ? 'Loading events...' : 'No events found. Create one!'}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+                {/* Add extra padding at the bottom to ensure content isn't hidden behind FAB */}
+                <View style={{ height: 100 }} />
+            </ScrollView>
 
-            <View style={styles.fabContainer}>
+            {/* Responsive FAB with tooltip */}
+            <View style={styles.fabWrapper}>
                 <View style={styles.fabTooltipContainer}>
                     <Text style={styles.fabTooltipText}>Tap to Create a new Event</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={styles.fab}
                     onPress={navigateToCreateEvent}
+                    activeOpacity={0.7}
                 >
                     <Text style={styles.fabIcon}>+</Text>
                 </TouchableOpacity>
             </View>
-        </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    mainContainer: {
+        flex: 1,
+        position: 'relative',
+    },
     container: {
         flex: 1,
         backgroundColor: '#F5F7FF',
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
     header: {
         flexDirection: 'row',
@@ -160,30 +174,10 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#FFF',
     },
-    notificationButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingHorizontal: 14,
-        paddingVertical: 40,  // Add vertical padding
-        borderRadius: 25,
-        alignSelf: 'center',  // Center align the button vertically
-    },
-    notificationBadge: {
-        backgroundColor: 'red',
-        borderRadius: 12,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        marginLeft: 6,
-    },
-    notificationBadgeText: {
-        color: '#FFF',
-        fontWeight: '600',
-    },
     eventsContainer: {
         flex: 1,
         paddingHorizontal: 20,
-        marginBottom: 80, // Space for the FAB
+        paddingBottom: 20,
     },
     eventCard: {
         backgroundColor: 'white',
@@ -295,12 +289,12 @@ const styles = StyleSheet.create({
         color: '#666',
         textAlign: 'center',
     },
-    fabContainer: {
+    fabWrapper: {
         position: 'absolute',
-        right: 25,
-        bottom: -300, // Position above the navbar
         alignItems: 'center',
-        zIndex: 999, // Ensure it stays above other elements
+        right: '1%', // Use percentage instead of fixed pixels for responsive positioning
+        bottom: '12%', // Use percentage for responsive positioning
+        zIndex: 999,
     },
     fabTooltipContainer: {
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -321,7 +315,7 @@ const styles = StyleSheet.create({
     },
     fab: {
         width: 64,
-        height: 64, // Slightly larger for easier tapping
+        height: 64,
         borderRadius: 32,
         backgroundColor: '#6366F1',
         justifyContent: 'center',
@@ -332,12 +326,12 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
         elevation: 6,
         borderWidth: 3,
-        borderColor: 'rgba(255, 255, 255, 0.2)', // Subtle border for depth
+        borderColor: 'rgba(255, 255, 255, 0.2)',
     },
     fabIcon: {
         fontSize: 32,
         color: 'white',
         fontWeight: 'bold',
-        marginTop: -2, // Center the + symbol visually
+        marginTop: -2,
     },
 });
