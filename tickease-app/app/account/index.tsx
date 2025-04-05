@@ -6,7 +6,6 @@ import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { updateProfile, UserProfile } from '@/utils/functions';
-import updateProfile, { UserProfile } from '@/utils/functions';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Account() {
