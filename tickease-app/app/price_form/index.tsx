@@ -1,53 +1,95 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, FlatList, Alert, ScrollView } from 'react-native';
+import React, { useState, useRef, useCallback } from 'react';
+import {
+    View,
+    Text,
+    TextInput,
+    StyleSheet,
+    TouchableOpacity,
+    FlatList,
+    Alert,
+    Platform,
+    Keyboard
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router'; // Import router
+// Note: router is optional if only logging
+import { router } from 'expo-router';
 
-// --- Type Definitions (Corrected and Consistent) ---
+// --- Type Definitions (Fixed Fields) ---
 type AddOnOption = {
   id: string;
-  label: string; // Use 'label' consistently
+  label: string;
   price: number;
   description: string;
+};
+
+type PromoCode = {
+    id: string;
+    code: string;
+    discountType: 'percentage' | 'fixed';
+    discountValue: number;
 };
 
 type TicketType = {
   id: string;
-  label: string;      // Use 'label' consistently
-  maxQuantity: number; // Use 'maxQuantity' consistently
+  label: string;
+  maxQuantity: number;
   price: number;
   description: string;
-  addonOptions: AddOnOption[]; // Use 'addonOptions' consistently
+  addonOptions: AddOnOption[];
+  promoCodes: PromoCode[]; // Added promo codes
 };
 
 // --- Component ---
 const TicketTypeForm = () => {
+  // --- Refs for input focus ---
+  const inputRefs = useRef<{[key: string]: React.RefObject<TextInput>}>({});
+  const flatListRef = useRef<FlatList>(null);
+  
   // --- State ---
-  // Initialize state using the correct property names from TicketType
   const [ticketTypes, setTicketTypes] = useState<TicketType[]>([
     {
-      id: Date.now().toString(), // Generate ID for the first item too
-      label: '',          // Use 'label'
-      maxQuantity: 0,   // Use 'maxQuantity'
+      id: `ticket_${Date.now()}`,
+      label: '',
+      maxQuantity: 0,
       price: 0,
       description: '',
-      addonOptions: []    // Use 'addonOptions'
+      addonOptions: [],
+      promoCodes: [] // Initialized promo codes
     }
   ]);
+  
+  // Track currently focused input
+  const [activeInputId, setActiveInputId] = useState<string | null>(null);
+
+  // --- Helper function to create/get ref for an input ---
+  const getInputRef = (id: string) => {
+    if (!inputRefs.current[id]) {
+      inputRefs.current[id] = React.createRef<TextInput>();
+    }
+    return inputRefs.current[id];
+  };
 
   // --- Functions ---
 
-  // Add a new ticket type using the correct properties
+  // Add a new ticket type
   const addNewTicketType = () => {
-    const newTicket: TicketType = { // Ensure the new object conforms to TicketType
-      id: Date.now().toString(),
-      label: '',          // Use 'label'
-      maxQuantity: 0,   // Use 'maxQuantity'
+    const newTicket: TicketType = {
+      id: `ticket_${Date.now()}`,
+      label: '',
+      maxQuantity: 0,
       price: 0,
       description: '',
-      addonOptions: []    // Use 'addonOptions'
+      addonOptions: [],
+      promoCodes: [] // Initialize for new ticket
     };
     setTicketTypes([...ticketTypes, newTicket]);
+    
+    // Scroll to the new ticket after it's added
+    setTimeout(() => {
+      if (flatListRef.current) {
+        flatListRef.current.scrollToEnd({ animated: true });
+      }
+    }, 100);
   };
 
   // Remove a ticket type
@@ -56,11 +98,21 @@ const TicketTypeForm = () => {
       Alert.alert("Cannot Remove", "You must have at least one ticket type.");
       return;
     }
+    
+    // Remove associated refs
+    const updatedRefs = {...inputRefs.current};
+    Object.keys(updatedRefs).forEach(key => {
+      if (key.includes(id)) {
+        delete updatedRefs[key];
+      }
+    });
+    inputRefs.current = updatedRefs;
+    
     setTicketTypes(ticketTypes.filter(ticket => ticket.id !== id));
   };
 
-  // Update a ticket type field (value can be string, number, or array for addonOptions)
-  const updateTicketType = (id: string, field: keyof TicketType, value: string | number | AddOnOption[]) => {
+  // Update a ticket type's fixed field
+  const updateTicketType = (id: string, field: keyof Omit<TicketType, 'addonOptions' | 'promoCodes' | 'id'>, value: string | number) => {
     setTicketTypes(
       ticketTypes.map(ticket =>
         ticket.id === id ? { ...ticket, [field]: value } : ticket
@@ -68,19 +120,17 @@ const TicketTypeForm = () => {
     );
   };
 
-  // Add a new add-on option using the correct properties
+  // Add a new add-on option
   const addNewAddOn = (ticketId: string) => {
-    const newAddOn: AddOnOption = { // Ensure the new object conforms to AddOnOption
-      id: Date.now().toString(),
-      label: '',          // Use 'label'
+    const newAddOn: AddOnOption = {
+      id: `addon_${Date.now()}`,
+      label: '',
       price: 0,
       description: ''
     };
-
     setTicketTypes(
       ticketTypes.map(ticket =>
         ticket.id === ticketId
-          // Use 'addonOptions' when updating the array
           ? { ...ticket, addonOptions: [...ticket.addonOptions, newAddOn] }
           : ticket
       )
@@ -89,24 +139,31 @@ const TicketTypeForm = () => {
 
   // Remove an add-on option
   const removeAddOn = (ticketId: string, addOnId: string) => {
+    // Remove associated refs
+    const updatedRefs = {...inputRefs.current};
+    Object.keys(updatedRefs).forEach(key => {
+      if (key.includes(addOnId)) {
+        delete updatedRefs[key];
+      }
+    });
+    inputRefs.current = updatedRefs;
+    
     setTicketTypes(
       ticketTypes.map(ticket =>
         ticket.id === ticketId
-          // Use 'addonOptions' when filtering the array
           ? { ...ticket, addonOptions: ticket.addonOptions.filter(addon => addon.id !== addOnId) }
           : ticket
       )
     );
   };
 
-  // Update an add-on option field
-  const updateAddOn = (ticketId: string, addOnId: string, field: keyof AddOnOption, value: string | number) => {
+  // Update an add-on option's fixed field
+  const updateAddOn = (ticketId: string, addOnId: string, field: keyof Omit<AddOnOption, 'id'>, value: string | number) => {
     setTicketTypes(
       ticketTypes.map(ticket =>
         ticket.id === ticketId
           ? {
               ...ticket,
-              // Use 'addonOptions' when mapping through add-ons
               addonOptions: ticket.addonOptions.map(addon =>
                 addon.id === addOnId ? { ...addon, [field]: value } : addon
               )
@@ -116,417 +173,613 @@ const TicketTypeForm = () => {
     );
   };
 
-   // Navigate to the next screen
+  // Add a new promo code
+  const addNewPromoCode = (ticketId: string) => {
+    const newPromo: PromoCode = {
+      id: `promo_${Date.now()}`,
+      code: '',
+      discountType: 'percentage', // Default type
+      discountValue: 0
+    };
+    setTicketTypes(
+      ticketTypes.map(ticket =>
+        ticket.id === ticketId
+          ? { ...ticket, promoCodes: [...ticket.promoCodes, newPromo] }
+          : ticket
+      )
+    );
+  };
+
+  // Remove a promo code
+  const removePromoCode = (ticketId: string, promoCodeId: string) => {
+    // Remove associated refs
+    const updatedRefs = {...inputRefs.current};
+    Object.keys(updatedRefs).forEach(key => {
+      if (key.includes(promoCodeId)) {
+        delete updatedRefs[key];
+      }
+    });
+    inputRefs.current = updatedRefs;
+    
+    setTicketTypes(
+      ticketTypes.map(ticket =>
+        ticket.id === ticketId
+          ? { ...ticket, promoCodes: ticket.promoCodes.filter(promo => promo.id !== promoCodeId) }
+          : ticket
+      )
+    );
+  };
+
+  // Update a promo code field
+  const updatePromoCode = (ticketId: string, promoCodeId: string, field: keyof Omit<PromoCode, 'id'>, value: string | number) => {
+     // Format/Validate Code Input
+     if (field === 'code') {
+         value = String(value).toUpperCase().replace(/[^A-Z0-9]/g, ''); // Allow only uppercase letters/numbers
+     }
+     // Validate Discount Value
+     if (field === 'discountValue') {
+        value = Math.max(0, Number(value) || 0); // Ensure non-negative number
+        // Find the current type to clamp percentage
+        const currentTicket = ticketTypes.find(t => t.id === ticketId);
+        const currentPromo = currentTicket?.promoCodes.find(p => p.id === promoCodeId);
+        if (currentPromo?.discountType === 'percentage') {
+            value = Math.min(100, Number(value)); // Clamp percentage to 100
+        }
+     }
+
+    setTicketTypes(
+      ticketTypes.map(ticket =>
+        ticket.id === ticketId
+          ? {
+              ...ticket,
+              promoCodes: ticket.promoCodes.map(promo =>
+                promo.id === promoCodeId ? { ...promo, [field]: value } : promo
+              )
+            }
+          : ticket
+      )
+    );
+  };
+
+   // Log data on "Next" press
    const goToNextStep = () => {
-       // Optional: Add validation here to ensure required fields are filled
-       // before navigating.
-       console.log("Navigating to /qr with data:", ticketTypes); // Log data before navigating
-       // In a real app, you might save `ticketTypes` here (e.g., AsyncStorage, API call)
-       // You could also pass data via router params if needed, e.g.:
-       // router.push({ pathname: '/qr', params: { ticketData: JSON.stringify(ticketTypes) } });
-       router.push('/qr');
+       const isValid = ticketTypes.every(ticket => ticket.label.trim() !== '');
+       if (!isValid) {
+           Alert.alert("Missing Information", "Please ensure all ticket types have at least a label.");
+           return;
+       }
+       // Add more validation for promo codes if needed (e.g., code must exist)
+
+       console.log("--- Final Ticket Page Data (Fixed Fields + Promo Codes) ---");
+       console.log(JSON.stringify(ticketTypes, null, 2));
+       console.log("-------------------------------------------------------");
+       Keyboard.dismiss();
+       Alert.alert("Data Logged", "Ticket configuration has been logged to the console.");
+      router.push('/qr');
    };
 
+  // --- Custom StableTextInput component with stable refs ---
+  const StableTextInput = useCallback(({ 
+    id, 
+    value, 
+    onChangeText, 
+    style, 
+    ...props 
+  }: { 
+    id: string, 
+    value: string, 
+    onChangeText: (text: string) => void, 
+    style: any, 
+    [key: string]: any 
+  }) => {
+    const inputRef = getInputRef(id);
+    
+    // Handle focus management
+    React.useEffect(() => {
+      if (activeInputId === id && inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, [id, activeInputId]);
+    
+    return (
+      <TextInput
+        ref={inputRef}
+        style={style}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setActiveInputId(id)}
+        {...props}
+      />
+    );
+  }, [activeInputId]);
 
-  // --- Sub-Components ---
+  // --- Sub-Components (modified to use StableTextInput) ---
 
-  // Component for rendering Add-On forms
-  // Use 'addonOptions' prop
-  const AddOnForm = ({ ticketId, addonOptions }: { ticketId: string, addonOptions: AddOnOption[] }) => (
+  // Add-On Form Component
+  const AddOnForm = useCallback(({ 
+    ticketId, 
+    addonOptions 
+  }: { 
+    ticketId: string, 
+    addonOptions: AddOnOption[] 
+  }) => (
     <View style={styles.addOnsContainer}>
       <Text style={styles.addOnsTitle}>Add-On Options</Text>
-
-      {/* Map over 'addonOptions' */}
+      {addonOptions.length === 0 && <Text style={styles.noItemsText}>No add-ons defined.</Text>}
       {addonOptions.map((addOn) => (
         <View key={addOn.id} style={styles.addOnFormSection}>
           <View style={styles.formHeader}>
             <Text style={styles.formSubtitle}>Add-On</Text>
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => removeAddOn(ticketId, addOn.id)}
-            >
-              <Ionicons name="close-circle" size={20} color="#FF6B6B" />
+            <TouchableOpacity style={styles.removeButton} onPress={() => removeAddOn(ticketId, addOn.id)}>
+              <Ionicons name="close-circle-outline" size={22} color="#FF6B6B" />
             </TouchableOpacity>
           </View>
-
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Enter add-on name</Text>
-            <TextInput
-              style={styles.textInput}
-              value={addOn.label} // Use 'label' from AddOnOption
-              // Update the 'label' field
-              onChangeText={(text) => updateAddOn(ticketId, addOn.id, 'label', text)}
-              placeholder="e.g. VIP Access"
+            <Text style={styles.inputLabel}>Add-on name *</Text>
+            <StableTextInput 
+              id={`${ticketId}_${addOn.id}_label`}
+              style={styles.textInput} 
+              value={addOn.label} 
+              onChangeText={(text) => updateAddOn(ticketId, addOn.id, 'label', text)} 
+              placeholder="e.g. VIP Parking" 
+              placeholderTextColor="#ADB5BD"
             />
           </View>
-
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Price</Text>
-            <TextInput
-              style={styles.textInput}
-              value={addOn.price === 0 ? '' : addOn.price.toString()} // Handle 0 price display
-              onChangeText={(text) => {
-                // Ensure only numbers are parsed, default to 0
-                const price = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
-                updateAddOn(ticketId, addOn.id, 'price', price);
-              }}
-              keyboardType="numeric"
-              placeholder="0"
+            <Text style={styles.inputLabel}>Price ($)</Text>
+            <StableTextInput 
+              id={`${ticketId}_${addOn.id}_price`}
+              style={styles.textInput} 
+              value={addOn.price === 0 ? '' : addOn.price.toString()} 
+              onChangeText={(text) => updateAddOn(ticketId, addOn.id, 'price', parseInt(text.replace(/[^0-9]/g, ''), 10) || 0)} 
+              keyboardType="numeric" 
+              placeholder="0" 
+              placeholderTextColor="#ADB5BD"
             />
           </View>
-
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Enter description</Text>
-            <TextInput
-              style={styles.textAreaInput}
-              value={addOn.description} // Use 'description' from AddOnOption
-              // Update the 'description' field
-              onChangeText={(text) => updateAddOn(ticketId, addOn.id, 'description', text)}
-              placeholder="e.g. Backstage access with meet and greet"
-              multiline={true}
-              numberOfLines={2}
+            <Text style={styles.inputLabel}>Description</Text>
+            <StableTextInput 
+              id={`${ticketId}_${addOn.id}_desc`}
+              style={styles.textAreaInput} 
+              value={addOn.description} 
+              onChangeText={(text) => updateAddOn(ticketId, addOn.id, 'description', text)} 
+              placeholder="e.g. Includes preferred parking spot" 
+              placeholderTextColor="#ADB5BD" 
+              multiline={true} 
+              numberOfLines={2} 
               textAlignVertical="top"
             />
           </View>
         </View>
       ))}
-
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => addNewAddOn(ticketId)}
-      >
-        <Ionicons name="add-circle" size={20} color="#6A5ACD" />
-        <Text style={styles.addButtonText}>Add Another Add-On</Text>
+      <TouchableOpacity style={styles.addButton} onPress={() => addNewAddOn(ticketId)}>
+        <Ionicons name="add-circle-outline" size={22} color="#6A5ACD" />
+        <Text style={styles.addButtonText}>Add Add-On</Text>
       </TouchableOpacity>
     </View>
-  );
+  ), [StableTextInput]);
 
-  // Component for rendering a single Ticket Type form
-  const renderTicketForm = ({ item }: { item: TicketType }) => (
+  // Promo Code Form Component
+  const PromoCodeForm = useCallback(({ 
+    ticketId, 
+    promoCodes 
+  }: { 
+    ticketId: string, 
+    promoCodes: PromoCode[] 
+  }) => (
+    <View style={styles.promoCodesContainer}>
+      <Text style={styles.promoCodesTitle}>Promo Codes</Text>
+      {promoCodes.length === 0 && <Text style={styles.noItemsText}>No promo codes defined.</Text>}
+      {promoCodes.map((promo) => (
+        <View key={promo.id} style={styles.promoCodeFormSection}>
+          <View style={styles.formHeader}>
+            <Text style={styles.formSubtitle}>Promo Code</Text>
+            <TouchableOpacity style={styles.removeButton} onPress={() => removePromoCode(ticketId, promo.id)}>
+              <Ionicons name="close-circle-outline" size={22} color="#FF6B6B" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.inputRow}>
+            <Text style={styles.inputLabel}>Code *</Text>
+            <StableTextInput 
+              id={`${ticketId}_${promo.id}_code`}
+              style={[styles.textInput, styles.promoCodeInput]} 
+              value={promo.code} 
+              onChangeText={(text) => updatePromoCode(ticketId, promo.id, 'code', text)} 
+              placeholder="e.g. EARLYBIRD10" 
+              placeholderTextColor="#ADB5BD" 
+              autoCapitalize="characters"
+            />
+          </View>
+          <View style={styles.rowContainer}>
+            <View style={styles.halfInputContainer}>
+              <Text style={styles.inputLabel}>Discount Type *</Text>
+              <View style={styles.discountTypeSelector}>
+                <TouchableOpacity style={[styles.discountTypeButton, promo.discountType === 'percentage' && styles.discountTypeButtonActive]} onPress={() => updatePromoCode(ticketId, promo.id, 'discountType', 'percentage')}>
+                  <Text style={[styles.discountTypeButtonText, promo.discountType === 'percentage' && styles.discountTypeButtonTextActive]}>% Percentage</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.discountTypeButton, promo.discountType === 'fixed' && styles.discountTypeButtonActive]} onPress={() => updatePromoCode(ticketId, promo.id, 'discountType', 'fixed')}>
+                  <Text style={[styles.discountTypeButtonText, promo.discountType === 'fixed' && styles.discountTypeButtonTextActive]}>$ Fixed</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.halfInputContainer}>
+              <Text style={styles.inputLabel}>Discount Value *</Text>
+              <StableTextInput 
+                id={`${ticketId}_${promo.id}_value`}
+                style={styles.textInput} 
+                value={promo.discountValue === 0 ? '' : promo.discountValue.toString()} 
+                onChangeText={(text) => updatePromoCode(ticketId, promo.id, 'discountValue', text)} 
+                keyboardType="numeric" 
+                placeholder={promo.discountType === 'percentage' ? "e.g. 10" : "e.g. 5"} 
+                placeholderTextColor="#ADB5BD"
+              />
+            </View>
+          </View>
+        </View>
+      ))}
+      <TouchableOpacity style={styles.addButton} onPress={() => addNewPromoCode(ticketId)}>
+        <Ionicons name="add-circle-outline" size={22} color="#6A5ACD" />
+        <Text style={styles.addButtonText}>Add Promo Code</Text>
+      </TouchableOpacity>
+    </View>
+  ), [StableTextInput]);
+
+  // --- Main Ticket Form Renderer ---
+  const renderTicketForm = useCallback(({ item }: { item: TicketType }) => (
     <View style={styles.formSection}>
-      {/* Header with Remove Button */}
+      {/* Header */}
       <View style={styles.formHeader}>
-        <Text style={styles.formTitle}>Ticket Type</Text>
-        {ticketTypes.length > 1 && ( // Only show remove if more than one ticket type exists
-          <TouchableOpacity
-            style={styles.removeButton}
-            onPress={() => removeTicketType(item.id)}
-          >
+        <Text style={styles.formTitle}>Ticket Type {ticketTypes.findIndex(t => t.id === item.id) + 1}</Text>
+        {ticketTypes.length > 1 && (
+          <TouchableOpacity style={styles.removeButton} onPress={() => removeTicketType(item.id)}>
             <Ionicons name="trash-outline" size={22} color="#FF6B6B" />
           </TouchableOpacity>
         )}
       </View>
-
-      {/* Ticket Type Label Input */}
+      {/* Label */}
       <View style={styles.inputRow}>
         <Text style={styles.inputLabel}>Ticket Label *</Text>
-        <TextInput
+        <StableTextInput
+          id={`${item.id}_label`}
           style={styles.textInput}
-          value={item.label} // Use 'label' from TicketType
-          // Update the 'label' field
+          value={item.label}
           onChangeText={(text) => updateTicketType(item.id, 'label', text)}
           placeholder="e.g. General Admission, VIP"
+          placeholderTextColor="#ADB5BD"
         />
       </View>
-
-      {/* Quantity and Price Row */}
+      {/* Quantity & Price */}
       <View style={styles.rowContainer}>
         <View style={styles.halfInputContainer}>
           <Text style={styles.inputLabel}>Max Quantity *</Text>
-          <TextInput
+          <StableTextInput
+            id={`${item.id}_maxQty`}
             style={styles.textInput}
-            // Use 'maxQuantity' from TicketType
-            value={item.maxQuantity === 0 ? '' : item.maxQuantity.toString()} // Handle 0 display
-            onChangeText={(text) => {
-              // Ensure only numbers are parsed, default to 0
-              const quantity = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
-              // Update the 'maxQuantity' field
-              updateTicketType(item.id, 'maxQuantity', quantity);
-            }}
+            value={item.maxQuantity === 0 ? '' : item.maxQuantity.toString()}
+            onChangeText={(text) => updateTicketType(item.id, 'maxQuantity', parseInt(text.replace(/[^0-9]/g, ''), 10) || 0)}
             keyboardType="numeric"
             placeholder="100"
+            placeholderTextColor="#ADB5BD"
           />
         </View>
-
         <View style={styles.halfInputContainer}>
           <Text style={styles.inputLabel}>Price ($) *</Text>
-          <TextInput
+          <StableTextInput
+            id={`${item.id}_price`}
             style={styles.textInput}
-            value={item.price === 0 ? '' : item.price.toString()} // Use 'price' from TicketType
-            onChangeText={(text) => {
-              // Ensure only numbers are parsed, default to 0
-              const price = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
-              // Update the 'price' field
-              updateTicketType(item.id, 'price', price);
-            }}
+            value={item.price === 0 ? '' : item.price.toString()}
+            onChangeText={(text) => updateTicketType(item.id, 'price', parseInt(text.replace(/[^0-9]/g, ''), 10) || 0)}
             keyboardType="numeric"
             placeholder="50"
+            placeholderTextColor="#ADB5BD"
           />
         </View>
       </View>
-
-      {/* Description Input */}
+      {/* Description */}
       <View style={styles.inputRow}>
         <Text style={styles.inputLabel}>Description</Text>
-        <TextInput
+        <StableTextInput
+          id={`${item.id}_desc`}
           style={styles.textAreaInput}
-          value={item.description} // Use 'description' from TicketType
-          // Update the 'description' field
+          value={item.description}
           onChangeText={(text) => updateTicketType(item.id, 'description', text)}
-          placeholder="e.g. Includes access to main event areas. Seating not guaranteed."
+          placeholder="e.g. Includes access to main event areas."
+          placeholderTextColor="#ADB5BD"
           multiline={true}
           numberOfLines={3}
           textAlignVertical="top"
         />
       </View>
-
-      {/* Add-On Options Component */}
-      {/* Pass 'addonOptions' prop */}
+      {/* Add-Ons */}
       <AddOnForm ticketId={item.id} addonOptions={item.addonOptions} />
+      {/* Promo Codes */}
+    
     </View>
-  );
+  ), [ticketTypes, activeInputId, StableTextInput, AddOnForm, PromoCodeForm]);
 
   // --- Main Return ---
   return (
     <View style={styles.container}>
-       {/* Use ScrollView instead of FlatList if performance is not critical
-           and you need more flexibility with content around the list */}
-       {/* <ScrollView
-        style={styles.listContainer}
-        contentContainerStyle={styles.listContentContainer}
-        showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled" // Good for forms
-      >
-        {ticketTypes.map(item => renderTicketForm({ item }))}
-      </ScrollView> */}
-
-       {/* FlatList is generally better for long lists */}
       <FlatList
+        ref={flatListRef}
         data={ticketTypes}
         renderItem={renderTicketForm}
         keyExtractor={(item) => item.id}
         style={styles.listContainer}
         contentContainerStyle={styles.listContentContainer}
         showsVerticalScrollIndicator={true}
-        keyboardShouldPersistTaps="handled" // Good for forms
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={<Text style={styles.pageHeader}>Create Ticket Types</Text>}
+        ListFooterComponent={<View style={{ height: 20 }} />}
+        removeClippedSubviews={false}
+        extraData={activeInputId} // Re-render when the active input changes
       />
-
-      {/* Floating button to add new ticket types */}
-      <TouchableOpacity
-        style={styles.floatingAddButton}
-        onPress={addNewTicketType}
-      >
-        <Ionicons name="add" size={24} color="#ffffff" />
-        <Text style={styles.floatingAddButtonText}>Add Type</Text>
+      <TouchableOpacity style={styles.floatingAddButton} onPress={addNewTicketType}>
+        <Ionicons name="add-outline" size={24} color="#ffffff" />
+        <Text style={styles.floatingAddButtonText}>Add Ticket Type</Text>
       </TouchableOpacity>
-
-      {/* Action button container at the bottom */}
-       <View style={styles.bottomActionContainer}>
-           <TouchableOpacity
-               style={styles.nextButton}
-               onPress={goToNextStep}
-           >
-               <Text style={styles.nextButtonText}>Next</Text>
-               <Ionicons name="arrow-forward" size={20} color="#ffffff" />
-           </TouchableOpacity>
-       </View>
-
+      <View style={styles.bottomActionContainer}>
+        <TouchableOpacity style={styles.nextButton} onPress={goToNextStep}>
+          <Text style={styles.nextButtonText}>Create Event </Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
 
 // --- Styles ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    width: '100%',
-    // paddingTop: 10, // Reduced top padding
-    backgroundColor: '#F8F9FA', // Lighter background
-  },
-  listContainer: {
-    flex: 1,
-    width: '100%',
-    // paddingHorizontal: 0, // Let formSection handle horizontal padding
-  },
-  listContentContainer: {
-     paddingTop: 16, // Add padding at the top of the list
-     paddingHorizontal: 12, // Horizontal padding for list items
-     paddingBottom: 100, // Ensure space for floating button and next button
-  },
-  formSection: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#DEE2E6', // Lighter border
-    borderRadius: 8,      // Slightly smaller radius
-    backgroundColor: '#ffffff',
-    // Removed position: 'relative' as it wasn't necessary here
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 }, // Subtle shadow
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,        // Subtle elevation
-    marginBottom: 16,
-  },
-  formHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16, // More space after header
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
-  },
-  formTitle: {
-    fontSize: 17, // Slightly smaller
-    fontWeight: '600',
-    color: '#212529', // Darker text
-  },
-  removeButton: {
-    padding: 6, // Slightly larger tap area
-    borderRadius: 15, // Make it circular
-    backgroundColor: '#FFF0F0', // Light red background hint
-  },
-  rowContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  halfInputContainer: {
-    width: '48%', // Keep as is
-  },
-  inputRow: {
-    marginBottom: 16, // More space between rows
-  },
-  inputLabel: {
-    fontSize: 14,
-    color: '#495057', // Medium gray
-    marginBottom: 6,   // More space below label
-    fontWeight: '500',
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#CED4DA', // Standard border color
-    borderRadius: 6,      // Consistent radius
-    paddingVertical: 10,  // Adjust padding
-    paddingHorizontal: 12,
-    fontSize: 15,
-    backgroundColor: '#FFFFFF', // White background
-    color: '#212529',
-  },
-  textAreaInput: {
-    borderWidth: 1,
-    borderColor: '#CED4DA',
-    borderRadius: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    fontSize: 15,
-    backgroundColor: '#FFFFFF',
-    minHeight: 80, // Use minHeight
-    textAlignVertical: 'top',
-    color: '#212529',
-  },
-  floatingAddButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 85, // Position above the bottom action container
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#6A5ACD', // Keep color
-    flexDirection: 'row', // Align icon and text
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 15, // Add padding for text
-    elevation: 5, // Slightly more pronounced elevation
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    zIndex: 100,
-  },
-   floatingAddButtonText: {
-      color: '#ffffff',
-      marginLeft: 8,
-      fontWeight: '600',
-      fontSize: 14,
+    container: {
+        flex: 1,
+        backgroundColor: '#F8F9FA',
+    },
+    pageHeader: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#343A40',
+        marginBottom: 16,
+        marginTop: 8,
+        paddingHorizontal: 4,
+    },
+    listContainer: {
+        flex: 1,
+    },
+    listContentContainer: {
+        paddingTop: 10,
+        paddingHorizontal: 12,
+        paddingBottom: 120, // Space for buttons
+    },
+    formSection: {
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#DEE2E6',
+        borderRadius: 10,
+        backgroundColor: '#ffffff',
+        shadowColor: '#ADB5BD',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2,
+        marginBottom: 16,
+    },
+    formHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        paddingBottom: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E9ECEF',
+    },
+    formTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: '#212529',
+    },
+    formSubtitle: { // Used inside AddOn/Promo forms
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#495057',
+    },
+    removeButton: {
+        padding: 8,
+        borderRadius: 20,
+    },
+    rowContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    halfInputContainer: {
+        width: '48%',
+        marginBottom: 16, // Ensure consistent spacing
+    },
+    inputRow: {
+        marginBottom: 16,
+    },
+    inputLabel: {
+        fontSize: 14,
+        color: '#495057',
+        marginBottom: 8,
+        fontWeight: '500',
+    },
+    textInput: {
+        borderWidth: 1,
+        borderColor: '#CED4DA',
+        borderRadius: 8,
+        paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+        paddingHorizontal: 12,
+        fontSize: 15,
+        backgroundColor: '#FFFFFF',
+        color: '#212529',
+        minHeight: 46,
+    },
+    textAreaInput: {
+        borderWidth: 1,
+        borderColor: '#CED4DA',
+        borderRadius: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        fontSize: 15,
+        backgroundColor: '#FFFFFF',
+        minHeight: 80,
+        textAlignVertical: 'top',
+        color: '#212529',
+    },
+    floatingAddButton: {
+        position: 'absolute',
+        right: 20,
+        bottom: Platform.OS === 'ios' ? 100 : 85,
+        height: 54,
+        borderRadius: 27,
+        backgroundColor: '#6A5ACD',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        zIndex: 10,
+    },
+    floatingAddButtonText: {
+        color: '#ffffff',
+        marginLeft: 8,
+        fontWeight: 'bold',
+        fontSize: 15,
+    },
+    bottomActionContainer: {
+        width: '100%',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+        backgroundColor: '#FFFFFF',
+        borderTopWidth: 1,
+        borderTopColor: '#E9ECEF',
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: 'flex-end',
+        zIndex: 5,
+    },
+    nextButton: {
+        backgroundColor: '#6A5ACD',
+        paddingVertical: 14,
+        paddingHorizontal: 30,
+        borderRadius: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+    },
+    nextButtonText: {
+        color: '#ffffff',
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginRight: 10,
+    },
+    // --- Add-on Styles ---
+    addOnsContainer: {
+        marginTop: 24,
+        borderTopWidth: 1,
+        borderTopColor: '#E9ECEF',
+        paddingTop: 16,
+    },
+    addOnsTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#343A40',
+        marginBottom: 16,
+    },
+    addOnFormSection: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 8,
+        padding: 14,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#E9ECEF',
+    },
+    addButton: { // Shared by Add-on and Promo Code
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        marginTop: 8,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        paddingHorizontal: 5,
+    },
+    addButtonText: { // Shared by Add-on and Promo Code
+        marginLeft: 8,
+        fontSize: 14,
+        color: '#6A5ACD',
+        fontWeight: 'bold',
+    },
+     // --- Promo Code Styles ---
+    promoCodesContainer: {
+        marginTop: 24,
+        borderTopWidth: 1,
+        borderTopColor: '#E9ECEF',
+        paddingTop: 16,
+    },
+    promoCodesTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: '#343A40',
+        marginBottom: 16,
+    },
+    promoCodeFormSection: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 8,
+        padding: 14,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#E9ECEF',
+    },
+    promoCodeInput: {
+        // textTransform: 'uppercase', // Cannot apply directly via style
+    },
+    discountTypeSelector: {
+        flexDirection: 'row',
+        borderWidth: 1,
+        borderColor: '#CED4DA',
+        borderRadius: 8,
+        overflow: 'hidden',
+        minHeight: 46, // Match input height
+    },
+    discountTypeButton: {
+        flex: 1,
+        paddingVertical: 10,
+        paddingHorizontal: 5,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FFFFFF',
+    },
+    discountTypeButtonActive: {
+        backgroundColor: '#E9E7FD', // Light purple background
+    },
+    discountTypeButtonText: {
+        fontSize: 13,
+        color: '#495057',
+        fontWeight: '500',
+        textAlign: 'center',
+    },
+    discountTypeButtonTextActive: {
+        color: '#6A5ACD', // Purple text
+        fontWeight: 'bold',
+    },
+    noItemsText: { // Generic style for "No add-ons" or "No promo codes"
+       fontStyle: 'italic',
+       color: '#6c757d',
+       marginBottom: 12,
+       textAlign: 'center',
    },
-  // Renamed from actionsContainer
-  bottomActionContainer: {
-    width: '100%',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 20, // Add safe area padding if needed
-    backgroundColor: '#FFFFFF', // White background for the bar
-    borderTopWidth: 1,
-    borderTopColor: '#E9ECEF', // Light border separator
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'flex-end', // Align button to the right
-  },
-  // Styles for the Next button
-  nextButton: {
-      backgroundColor: '#6A5ACD',
-      paddingVertical: 12,
-      paddingHorizontal: 25,
-      borderRadius: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      elevation: 2,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 2,
-  },
-  nextButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '600',
-      marginRight: 8,
-  },
-  // Add-on specific styles
-  addOnsContainer: {
-    marginTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E9ECEF',
-    paddingTop: 16,
-  },
-  addOnsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#343A40',
-    marginBottom: 12,
-  },
-  addOnFormSection: {
-    backgroundColor: '#F8F9FA', // Light background for contrast
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 12, // Space between add-ons
-    borderWidth: 1,
-    borderColor: '#E9ECEF',
-  },
-  formSubtitle: {
-    fontSize: 15,
-    fontWeight: '600', // Make add-on subtitle slightly bolder
-    color: '#495057',
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    // justifyContent: 'center', // Removed to align left
-    paddingVertical: 10,
-    marginTop: 6,
-    // backgroundColor: '#E9E7FD', // Light purple background
-    borderRadius: 6,
-    // paddingHorizontal: 12, // Padding if background is used
-  },
-  addButtonText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#6A5ACD',
-    fontWeight: '600', // Bolder add button text
-  }
 });
 
 export default TicketTypeForm;

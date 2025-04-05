@@ -1,332 +1,329 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router'; // Import the router
+import { router } from 'expo-router';
 
-const QuestionSelector = () => {
-  
-  
-  // Initial state with first two options mandatory
-  const [questionSets, setQuestionSets] = useState([
-    { 
-      id: 1, 
-      title: 'Personal Information', 
+// --- Demo Data (as provided) ---
+const initialQuestionSets = [
+    {
+      id: 1,
+      title: 'Personal Information',
       summary: 'Basic contact information including your name, email address, and phone number to help us reach you.',
-      selected: true, 
+      selected: true,
       mandatory: true,
       fields: ['Name', 'Email address', 'Phone number']
     },
-    { 
-      id: 2, 
-      title: 'Location Details', 
+    {
+      id: 2,
+      title: 'Location Details',
       summary: 'Your complete address information including street address, city, state, postal code and country to identify your location.',
-      selected: true, 
+      selected: true,
       mandatory: true,
-      fields: ['Address', 'City', 'State', 'Postal code', 'Country'] 
+      fields: ['Address', 'City', 'State', 'Postal code', 'Country']
     },
-    { 
-      id: 3, 
-      title: 'Demographics', 
+    {
+      id: 3,
+      title: 'Demographics',
       summary: 'Optional personal demographic information including birth date, gender, occupation, organization, and your interests to help us customize our services.',
-      selected: false, 
+      selected: false,
       mandatory: false,
       fields: ['Date of birth', 'Gender', 'Occupation', 'Company/Organization Name', 'Interests']
     },
-    { 
-      id: 4, 
-      title: 'Special requirements or preferences', 
+    {
+      id: 4,
+      title: 'Special requirements or preferences',
       summary: 'Information about any dietary restrictions, accessibility needs, or other special requirements to ensure we can accommodate your specific needs.',
-      selected: false, 
+      selected: false,
       mandatory: false,
       fields: ['Dietary restrictions', 'Accessibility needs', 'Special requirements']
     },
-    { 
-      id: 5, 
-      title: 'Final Information', 
+    {
+      id: 5,
+      title: 'Final Information',
       summary: 'Details about how you found us, marketing preferences, and consent to our terms and conditions to complete your profile.',
-      selected: false, 
+      selected: false,
       mandatory: false,
       fields: ['Where did you hear about us?', 'Marketing emails consent', 'Agreement to terms and conditions']
     }
-  ]);
+  ];
 
-  // Toggle selection of a question set
-  const toggleQuestionSet = (id) => {
-    setQuestionSets(questionSets.map(set => 
-      set.id === id && !set.mandatory ? { ...set, selected: !set.selected } : set
-    ));
-  };
 
-  // Handle dropdown toggle
-  const [expandedSet, setExpandedSet] = useState(null);
-  
-  const toggleExpand = (id) => {
-    setExpandedSet(expandedSet === id ? null : id);
-  };
+const QuestionSelector = () => {
+  // Use the initial demo data
+  const [questionSets, setQuestionSets] = useState(initialQuestionSets);
+  const [expandedSet, setExpandedSet] = useState(null); // Track which set is expanded
 
-  // Function to navigate to price form
-  const handleNext = () => {
-    router.push('/price_form');
-  };
-
-  // Function to render text with highlighted important words
-  const renderHighlightedText = (text) => {
-    if (!text) return null;
-  
-    // Split by the asterisks (*) which mark important words
-    const parts = text.split(/\*/);
-  
-    return (
-      <>
-        {parts.map((part, index) => {
-          // Every odd index is a highlighted part
-          const isHighlighted = index % 2 === 1;
-          return (
-            <Text
-              key={index}
-              style={isHighlighted ? styles.highlightedText : null}
-            >
-              {part}
-            </Text>
-          );
-        })}
-      </>
+  // Toggle selection of an optional question set
+  const toggleQuestionSet = (id:any) => {
+    setQuestionSets(currentSets =>
+      currentSets.map(set =>
+        set.id === id && !set.mandatory ? { ...set, selected: !set.selected } : set
+      )
     );
   };
 
+  // Handle dropdown toggle
+  const toggleExpand = (id:any) => {
+    setExpandedSet(currentExpandedId => (currentExpandedId === id ? null : id));
+  };
+
+  // --- NEW: Function to render summary with highlighted fields ---
+  interface RenderSummaryProps {
+    summary: string;
+    fields: string[];
+  }
+
+  const renderSummaryWithHighlights = ({ summary, fields }: RenderSummaryProps) => {
+    if (!summary || !fields || fields.length === 0) {
+      return <Text style={styles.summary}>{summary}</Text>;
+    }
+
+    // Create a regex that matches any of the field names (case-insensitive)
+    // Escape special regex characters in field names if necessary (basic example assumes simple names)
+    const escapedFields = fields.map((f: string) => f.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+    const regex = new RegExp(`(${escapedFields.join('|')})`, 'gi');
+
+    // Split the summary by the regex. Capturing group keeps delimiters in the result.
+    const parts = summary.split(regex);
+
+    return (
+      <Text style={styles.summary}>
+        {parts
+          .map((part: string, index: number) => {
+            // Check if this part is one of the fields (case-insensitive)
+            const isHighlight = fields.some((field: string) => field.toLowerCase() === part?.toLowerCase());
+            if (isHighlight) {
+              return (
+                <Text key={`${part}-${index}`} style={styles.highlightedText}>
+                  {part}
+                </Text>
+              );
+            } else {
+              return part; // Render normal text part
+            }
+          })
+          .filter(Boolean)} {/* Filter out potential empty strings from split */}
+      </Text>
+    );
+  };
+
+  // --- NEW: Handler for the Next button ---
+  const handleNext = () => {
+    const selectedSets = questionSets
+      .filter(set => set.selected)
+      .map(set => ({ id: set.id, title: set.title, fields: set.fields })); // Extract desired info
+
+    console.log("Selected Question Sets:", JSON.stringify(selectedSets, null, 2));
+    // Add navigation logic or further actions here
+    router.push('/price_form'); // Example navigation to the next page
+  };
+
+
   return (
-    <View style={styles.mainContainer}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.container}>
-          <Text style={styles.pageTitle}>Select the questions you want to ask user</Text>
-          
-          {questionSets.map((set) => (
-            <View key={set.id} style={styles.questionSetContainer}>
-              <View style={styles.questionSetHeader}>
-                {/* Title area - clickable to expand/collapse */}
-                <TouchableOpacity 
-                  style={styles.titleContainer}
-                  onPress={() => toggleExpand(set.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.title}>
-                    {expandedSet === set.id ? `${set.id}. ${set.title}` : set.title}
-                  </Text>
-                </TouchableOpacity>
-                
-                {/* Plus/Minus button */}
-                <TouchableOpacity 
-                  style={[
-                    styles.toggleButton, 
-                    set.selected && styles.activeToggleButton,
-                    set.mandatory && styles.disabledToggleButton
-                  ]}
-                  onPress={() => !set.mandatory && toggleQuestionSet(set.id)}
-                  disabled={set.mandatory}
-                  activeOpacity={set.mandatory ? 1 : 0.7}
-                >
-                  <Text style={[
-                    styles.toggleButtonText,
-                    set.selected && styles.activeToggleButtonText
-                  ]}>
-                    {set.selected ? '-' : '+'}
-                  </Text>
-                </TouchableOpacity>
-                
-                {/* Arrow button */}
-                <TouchableOpacity 
-                  style={styles.expandButton}
-                  onPress={() => toggleExpand(set.id)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons 
-                    name={expandedSet === set.id ? "chevron-up" : "chevron-down"} 
-                    size={24} 
-                    color="#3b82f6" 
-                  />
-                </TouchableOpacity>
-              </View>
-              
-              {expandedSet === set.id && (
-                <View style={styles.detailsContainer}>
-                  <Text style={styles.description}>{set.description}</Text>
-                  <Text style={styles.summary}>
-                    {renderHighlightedText(set.summary)}
-                  </Text>
-                </View>
-              )}
+    <View style={styles.outerContainer}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.pageTitle}>Select the questions you want to ask</Text>
+
+        {questionSets.map((set) => (
+          <View key={set.id} style={styles.questionSetContainer}>
+            {/* --- Header Section --- */}
+            <View style={styles.questionSetHeader}>
+              {/* Toggle Button (+/-) */}
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  set.selected && styles.activeToggleButton,
+                  set.mandatory && styles.disabledToggleButton // Style for mandatory
+                ]}
+                onPress={() => toggleQuestionSet(set.id)}
+                disabled={set.mandatory} // Disable button if mandatory
+                activeOpacity={set.mandatory ? 1 : 0.7} // Reduce opacity feedback if disabled
+              >
+                <Ionicons
+                  name={set.selected ? "remove-outline" : "add-outline"} // Use icons
+                  size={20} // Slightly smaller icon
+                  color={set.selected ? '#fff' : '#3b82f6'}
+                />
+              </TouchableOpacity>
+
+              {/* Title Area (Clickable to expand) */}
+              <TouchableOpacity
+                style={styles.titleContainer}
+                onPress={() => toggleExpand(set.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.title}>{set.title}</Text>
+              </TouchableOpacity>
+
+              {/* Expand/Collapse Arrow Button */}
+              <TouchableOpacity
+                style={styles.expandButton}
+                onPress={() => toggleExpand(set.id)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={expandedSet === set.id ? "chevron-up-outline" : "chevron-down-outline"}
+                  size={24}
+                  color="#3b82f6"
+                />
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
+
+            {/* --- Expanded Details Section --- */}
+            {expandedSet === set.id && (
+              <View style={styles.detailsContainer}>
+                {/* Render summary with highlights */}
+                {renderSummaryWithHighlights({ summary: set.summary, fields: set.fields })}
+              </View>
+            )}
+          </View>
+        ))}
       </ScrollView>
-      
-      {/* Next Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.nextButton}
-          onPress={handleNext}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.nextButtonText}>Next</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" style={styles.nextButtonIcon} />
-        </TouchableOpacity>
+
+      {/* --- Next Button --- */}
+      <View style={styles.footer}>
+         <TouchableOpacity
+            style={styles.nextButton}
+            onPress={handleNext}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.nextButtonText}>Next</Text>
+            <Ionicons name="arrow-forward-outline" size={20} color="#fff" style={styles.nextButtonIcon}/>
+         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
+// --- Styles --- (Refined for better alignment and appearance)
 const styles = StyleSheet.create({
-  mainContainer: {
+  outerContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8fafc', // Light gray background
   },
   scrollView: {
-    backgroundColor: '#f8fafc',
-    marginTop: 40,
-  },
-  container: {
     flex: 1,
+  },
+  scrollContentContainer: {
     padding: 16,
-    backgroundColor: '#f8fafc',
-    paddingBottom: 80, // Add padding to account for the button
+    paddingBottom: 100, // Extra padding at bottom so content doesn't hide behind footer
   },
   pageTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 20,
-    color: '#1e293b',
+    fontSize: 22, // Slightly larger title
+    fontWeight: 'bold', // Bolder
+    marginBottom: 24, // More space below title
+    color: '#1e293b', // Dark slate color
     textAlign: 'left',
   },
   questionSetContainer: {
-    marginBottom: 12,
+    marginBottom: 16, // Consistent spacing between items
+    borderRadius: 12, // Slightly more rounded corners
+    backgroundColor: '#fff', // White background for cards
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: '#e2e8f0', // Light border color
+    // Subtle shadow for depth
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden', // Ensures border radius is applied correctly
   },
   questionSetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-  },
-  titleContainer: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingRight: 10,
-  },
-  title: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
+    paddingVertical: 12, // Adjusted padding
+    paddingHorizontal: 16,
   },
   toggleButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 36, // Slightly smaller button
+    height: 36,
+    borderRadius: 18, // Keep it circular
     borderWidth: 2,
-    borderColor: '#3b82f6',
+    borderColor: '#3b82f6', // Blue border
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12, // Space between button and title
     backgroundColor: '#fff',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
   },
   activeToggleButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#3b82f6', // Blue background when active
+    borderColor: '#3b82f6',
   },
   disabledToggleButton: {
-    opacity: 0.5,
-    borderColor: '#94a3b8',
+    backgroundColor: '#e2e8f0', // Gray background when mandatory/disabled
+    borderColor: '#cbd5e1', // Lighter gray border
+    opacity: 0.8, // Indicate disabled state
   },
-  toggleButtonText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#3b82f6',
-    textAlign: 'center',
+  // Removed toggleButtonText styles as icons are now used
+
+  titleContainer: {
+    flex: 1, // Takes up remaining space
+    justifyContent: 'center', // Center title vertically if needed
   },
-  activeToggleButtonText: {
-    color: '#fff',
+  title: {
+    fontSize: 16, // Good title size
+    fontWeight: '600', // Semi-bold
+    color: '#334155', // Darker text color
   },
   expandButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    padding: 8, // Make the touch area slightly larger
+    marginLeft: 8, // Space between title and arrow
   },
   detailsContainer: {
-    padding: 16,
-    paddingTop: 4,
-    paddingBottom: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    backgroundColor: '#f8fafc',
+    paddingHorizontal: 16,
+    paddingBottom: 16, // Padding below the summary
+    paddingTop: 8, // Reduced padding top as it follows header
+    backgroundColor: '#f8fafc', // Slightly different background for details
+    borderTopWidth: 1, // Separator line
+    borderTopColor: '#f1f5f9', // Light separator color
   },
-  description: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 4,
-  },
+  // Description style removed as it wasn't in the data/requirements
   summary: {
     fontSize: 14,
-    color: '#475569',
-    lineHeight: 20,
+    color: '#475569', // Standard text color
+    lineHeight: 21, // Improve readability
   },
   highlightedText: {
-    color: '#3b82f6',
-    fontWeight: '600',
+    fontWeight: 'bold', // Make highlighted fields bold
+    color: '#2563eb', // Slightly darker blue for highlight
+    backgroundColor: '#dbeafe', // Very light blue background for subtle emphasis
+    paddingHorizontal: 2, // Add slight horizontal padding
+    borderRadius: 3, // Slightly rounded highlight background
   },
-  // Button styles
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  footer: {
     padding: 16,
-    backgroundColor: '#f8fafc',
+    paddingBottom: Platform.OS === 'ios' ? 32 : 16, // Extra padding for iOS home indicator
+    backgroundColor: '#f8fafc', // Match background
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 5,
+    borderTopColor: '#e2e8f0', // Separator line
   },
   nextButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    backgroundColor: '#3b82f6', // Consistent blue color
+    paddingVertical: 14, // Comfortable height
+    borderRadius: 10, // Rounded corners
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row', // Align text and icon
+     // Shadow for the button
     shadowColor: '#3b82f6',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowRadius: 5,
+    elevation: 6,
   },
   nextButtonText: {
-    color: '#fff',
+    color: '#fff', // White text
     fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
+    fontWeight: 'bold', // Bold text
   },
-  nextButtonIcon: {
-    marginLeft: 4,
-  }
+   nextButtonIcon: {
+     marginLeft: 8, // Space icon from text
+   },
 });
 
 export default QuestionSelector;

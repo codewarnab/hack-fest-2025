@@ -1,17 +1,24 @@
+"use client"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import RegistrationForm from "@/components/registration-form"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import ChatbotButton from "@/components/chatbot-button"
 
 export default function RegistrationPage() {
+  const router = useRouter()
+  
   return (
-    <main className="min-h-screen bg-black  py-12">
+    <main className="min-h-screen bg-black py-12">
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto">
           <div className="mb-6">
-            <Link href="/" className="text-primary hover:underline inline-flex items-center">
+            <button 
+              onClick={() => router.back()} 
+              className="text-primary hover:underline inline-flex items-center"
+            >
               ← Back to event
-            </Link>
+            </button>
           </div>
 
           <Card>
@@ -27,8 +34,6 @@ export default function RegistrationPage() {
           </Card>
         </div>
       </div>
-
-      
     </main>
   )
 }
