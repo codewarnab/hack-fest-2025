@@ -229,31 +229,7 @@ const createTickets = async (eventId: string, tickets: Ticket[]) => {
     return "success";
 };
 
-// Final Ticket Page Data(Fixed Fields + Promo Codes)-- -
-//         (NOBRIDGE) LOG[
-//             {
-//                 "id": "ticket_1743831527192",
-//                 "label": "Gdud",
-//                 "maxQuantity": 64,
-//                 "price": 5,
-//                 "description": "Bdhdhf",
-//                 "addonOptions": [
-//                     {
-//                         "id": "addon_1743831529068",
-//                         "label": "Hshd",
-//                         "price": 64,
-//                         "description": ""
-//                     },
-//                     {
-//                         "id": "addon_1743831539849",
-//                         "label": "",
-//                         "price": 0,
-//                         "description": ""
-//                     }
-//                 ]
-//             }
-//         ]
-//             (NOBRIDGE) LOG-------------------------------------------------------
+
 
 const uploadImageToSupabase = async (imageFile) => {
     try {

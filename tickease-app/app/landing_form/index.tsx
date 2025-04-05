@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
   Pressable, // Keep Pressable if needed elsewhere, but not for date inputs
+  FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
 import { FontAwesome, MaterialIcons } from '@expo/vector-icons'; // For icons
@@ -72,6 +73,8 @@ export default function CreateEvent() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   // --- Permissions ---
   useEffect(() => {
     (async () => {
@@ -143,6 +146,48 @@ export default function CreateEvent() {
   const handleRemoveTag = (tagToRemove: TagHandlerProps['tagToRemove']) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
+
+  const handleLocationInputChange = async (text) => {
+    setLocation(text);
+    console.log('Location input:', text);
+
+    if (text.length > 2) {
+      setIsSearchingLocations(true);
+      try {
+        const query = text;
+        const components = "country:IN";
+        const types = "route";
+        const language = "en";
+        const api_key = "AIzaSyCzDpgy-dgQ9aXHcV9iOxZMLPkaioxn46g";
+        const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${api_key}&components=${components}&types=${types}&language=${language}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.predictions) {
+          // Limit to 3 suggestions as requested
+          const limitedSuggestions = data.predictions.slice(0, 3);
+          console.log('Location suggestions:', limitedSuggestions);
+          setLocationSuggestions(limitedSuggestions);
+        }
+      } catch (error) {
+        console.error('Error fetching location suggestions:', error);
+      } finally {
+        setIsSearchingLocations(false);
+      }
+    } else {
+      // Clear suggestions if input is too short
+      setLocationSuggestions([]);
+    }
+  };
+
+
+  const handleLocationSelect = (selectedLocation) => {
+    setLocation(selectedLocation.description);
+    // Clear suggestions after selection
+    setLocationSuggestions([]);
+  };
+
 
   // Submit Handler
   const handleSubmit = useCallback(async () => {
@@ -242,6 +287,7 @@ export default function CreateEvent() {
     selectedImageUri,
     facebookUrl, twitterUrl, instagramUrl, linkedinUrl, websiteUrl, router
   ]);
+
 
   // Cancel Handler
   const handleCancel = () => {
@@ -411,12 +457,34 @@ export default function CreateEvent() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              onChangeText={setLocation}
+              onChangeText={handleLocationInputChange}
               value={location}
               placeholder="e.g., Grand Hall, City Center"
               placeholderTextColor="#9CA3AF"
             />
+            {isSearchingLocations && (
+              <ActivityIndicator size="small" color="#6366F1" style={styles.locationLoader} />
+            )}
           </View>
+
+          {/* Location Suggestions */}
+          {locationSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={locationSuggestions}
+                keyExtractor={(item) => item.place_id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.suggestionItem}
+                    onPress={() => handleLocationSelect(item)}
+                  >
+                    <Text style={styles.suggestionText}>{item.description}</Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+              />
+            </View>
+          )}
         </View>
 
         {/* --- Form Section 3: Offer Deadline --- */}
@@ -550,6 +618,20 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 16,
     color: '#6B7280',
+  },
+  suggestionsContainer: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    marginTop: -16,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 1000,
   },
   formSection: {
     backgroundColor: '#FFFFFF',
@@ -727,5 +809,18 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  suggestionItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#111827',
+  },
+  locationLoader: {
+    marginLeft: 8,
   },
 });
