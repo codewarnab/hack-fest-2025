@@ -255,7 +255,51 @@ const createTickets = async (eventId: string, tickets: Ticket[]) => {
 //         ]
 //             (NOBRIDGE) LOG-------------------------------------------------------
 
-export { updateProfile, initializeEvent, updateEvent, createTickets };
+const uploadImageToSupabase = async (imageFile) => {
+    try {
+        // Safely get file extension or use default
+        let extension = 'jpg';
+        if (imageFile.name && typeof imageFile.name === 'string') {
+            const nameParts = imageFile.name.split('.');
+            if (nameParts.length > 1) {
+                extension = nameParts.pop() || 'jpg';
+            }
+        } else if (imageFile.type) {
+            // Try to get extension from MIME type
+            extension = imageFile.type.split('/').pop() || 'jpg';
+        }
+
+        const fileName = `${Date.now()}.${extension}`;
+        const filePath = `event-banners/${fileName}`;
+
+        // Direct upload of the file/blob
+        const { data, error } = await supabase.storage
+            .from('img')
+            .upload(filePath, imageFile, {
+                contentType: imageFile.type,
+                upsert: true,
+            });
+
+        if (error) throw error;
+
+        const { data: publicUrlData } = supabase.storage
+            .from('img')
+            .getPublicUrl(filePath);
+
+        return {
+            success: true,
+            publicUrl: publicUrlData.publicUrl,
+            filePath: filePath
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to upload image'
+        };
+    }
+};
+
+export { updateProfile, initializeEvent, updateEvent, createTickets, uploadImageToSupabase };
 
 
 const storeWithExpiry = async (key: string, value: any, ttlInMs: number) => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,10 +12,29 @@ export default function MyEvents() {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
 
-
     useEffect(() => {
         fetchEvents();
     }, []);
+
+    // Function to validate if an event has all required fields
+    const isValidEvent = (event) => {
+        const requiredFields = [
+            'title',
+            'description',
+            'venue',
+            'image',
+            'category',
+            'eventDate', // Using eventDate instead of date
+            'eventTime', // Using eventTime instead of time
+            'form_schema'
+        ];
+
+        return requiredFields.every(field =>
+            event[field] !== undefined &&
+            event[field] !== null &&
+            event[field] !== ''
+        );
+    };
 
     async function fetchEvents() {
         try {
@@ -29,7 +49,9 @@ export default function MyEvents() {
             if (error) {
                 console.error('Error fetching events:', error);
             } else {
-                setEvents(data || []);
+                // Filter events to only include those with all required fields
+                const validEvents = (data || []).filter(isValidEvent);
+                setEvents(validEvents);
             }
         } catch (error) {
             console.error('Error:', error);
@@ -48,13 +70,13 @@ export default function MyEvents() {
             onPress={() => router.push(`/account`)}
         >
             <View style={styles.eventCardHeader}>
-                {event.date ? (
+                {event.eventDate ? (
                     <View style={styles.eventDateBadge}>
                         <Text style={styles.eventDateDay}>
-                            {new Date(event.date).getDate()}
+                            {new Date(event.eventDate).getDate()}
                         </Text>
                         <Text style={styles.eventDateMonth}>
-                            {new Date(event.date).toLocaleString('default', { month: 'short' })}
+                            {new Date(event.eventDate).toLocaleString('default', { month: 'short' })}
                         </Text>
                     </View>
                 ) : (
@@ -69,15 +91,15 @@ export default function MyEvents() {
                     <View style={styles.eventMetaRow}>
                         <Ionicons name="calendar-outline" size={14} color="#6366F1" />
                         <Text style={styles.eventMeta} numberOfLines={1}>
-                            {event.date
-                                ? new Date(event.date).toLocaleDateString()
+                            {event.eventDate
+                                ? new Date(event.eventDate).toLocaleDateString()
                                 : 'Date to be announced'}
                         </Text>
                     </View>
                     <View style={styles.eventMetaRow}>
                         <Ionicons name="time-outline" size={14} color="#6366F1" />
                         <Text style={styles.eventMeta}>
-                            {event.time || 'Time to be announced'}
+                            {event.eventTime || 'Time to be announced'}
                         </Text>
                     </View>
                 </View>
@@ -114,9 +136,20 @@ export default function MyEvents() {
                         ))
                     ) : (
                         <View style={styles.noEventsContainer}>
-                            <Text style={styles.noEventsText}>
-                                {loading ? 'Loading events...' : 'No events found. Create one!'}
-                            </Text>
+                            {loading ? (
+                                <Text style={styles.noEventsText}>Loading events...</Text>
+                            ) : (
+                                <>
+                                    <Image
+                                        source={require('@/assets/images/noeventfound.svg')}
+                                        style={styles.noEventsImage}
+                                        contentFit="contain"
+                                    />
+                                    <Text style={styles.noEventsText}>
+                                        No events found. Create one with all required fields!
+                                    </Text>
+                                </>
+                            )}
                         </View>
                     )}
                 </View>
@@ -283,6 +316,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
+        marginTop: 40,
     },
     noEventsText: {
         fontSize: 16,
@@ -333,5 +367,10 @@ const styles = StyleSheet.create({
         color: 'white',
         fontWeight: 'bold',
         marginTop: -2,
+    },
+    noEventsImage: {
+        width: 200,
+        height: 200,
+        marginBottom: 20,
     },
 });
