@@ -29,8 +29,6 @@
     "expo": "~52.0.41",
     "expo-blur": "^14.0.3",
     "expo-clipboard": "^7.0.1",
-    "expo-constants": "~17.0.8",
-    "expo-device": "~7.0.3",
     "expo-file-system": "~18.0.12",
     "expo-font": "~13.0.4",
     "expo-haptics": "^14.0.1",
@@ -63,7 +61,10 @@
     "react-native-vector-icons": "^10.2.0",
     "react-native-view-shot": "^4.0.3",
     "react-native-web": "~0.19.13",
-    "expo-notifications": "~0.29.14"
+    "expo-notifications": "~0.29.14",
+    "expo-device": "~7.0.3",
+    "expo-constants": "~17.0.8",
+    "expo-modules-core": "~2.2.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

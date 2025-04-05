@@ -20,6 +20,7 @@ import {
 import { Platform, useColorScheme } from "react-native";
 import { SessionProvider } from "@/context/SessionProvider";
 import { Ionicons } from "@expo/vector-icons";
+import { PushNotificationProvider } from "@/components/notifications/PushNotificationProvider";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -53,23 +54,24 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <ThemedView style={{ flex: 1 }}>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="account/index" />
-            <Stack.Screen name="sign-up/index" />
-            <Stack.Screen name="eventlanding/index" />
-            <Stack.Screen name="landing_form/index" />
-            <Stack.Screen name="landing_form2" />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="reg_form/index" />
-            <Stack.Screen name="noti" />
-            <Stack.Screen name="qr" />
-          </Stack>
-        </ThemedView>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <PushNotificationProvider>
+        <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+          <ThemedView style={{ flex: 1 }}>
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="onboarding" />
+              <Stack.Screen name="account/index" />
+              <Stack.Screen name="sign-up/index" />
+              <Stack.Screen name="eventlanding/index" />
+              <Stack.Screen name="landing_form/index" />
+              <Stack.Screen name="landing_form2" />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="reg_form/index" />
+              <Stack.Screen name="qr" />
+            </Stack>
+          </ThemedView>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </PushNotificationProvider>
     </SessionProvider>
   );
 }
