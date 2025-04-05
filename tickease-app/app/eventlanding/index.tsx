@@ -4,6 +4,7 @@ import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import NotificationComponent from '../notif/index';
 
 export default function MyEvents() {
     const insets = useSafeAreaInsets();
@@ -40,13 +41,60 @@ export default function MyEvents() {
         router.push('/landing_form');
     };
 
-    const EventItem = ({ event  } : any ) => (
+    const EventItem = ({ event }: any) => (
         <TouchableOpacity 
             style={styles.eventCard}
             onPress={() => router.push(`/account`)}
         >
-            <Text style={styles.eventTitle}>{event.title || 'Untitled Event'}</Text>
-            <Text style={styles.eventDate}>{event.date || 'No date specified'}</Text>
+            <View style={styles.eventCardHeader}>
+                {event.date ? (
+                    <View style={styles.eventDateBadge}>
+                        <Text style={styles.eventDateDay}>
+                            {new Date(event.date).getDate()}
+                        </Text>
+                        <Text style={styles.eventDateMonth}>
+                            {new Date(event.date).toLocaleString('default', { month: 'short' })}
+                        </Text>
+                    </View>
+                ) : (
+                    <View style={styles.eventDateBadge}>
+                        <Ionicons name="calendar" size={28} color="#6366F1" />
+                    </View>
+                )}
+                <View style={styles.eventDetails}>
+                    <Text style={styles.eventTitle} numberOfLines={1} ellipsizeMode="tail">
+                        {event.title || 'Untitled Event'}
+                    </Text>
+                    <View style={styles.eventMetaRow}>
+                        <Ionicons name="calendar-outline" size={14} color="#6366F1" />
+                        <Text style={styles.eventMeta} numberOfLines={1}>
+                            {event.date 
+                                ? new Date(event.date).toLocaleDateString() 
+                                : 'Date to be announced'}
+                        </Text>
+                    </View>
+                    <View style={styles.eventMetaRow}>
+                        <Ionicons name="time-outline" size={14} color="#6366F1" />
+                        <Text style={styles.eventMeta}>
+                            {event.time || 'Time to be announced'}
+                        </Text>
+                    </View>
+                </View>
+            </View>
+            <View style={styles.eventCardFooter}>
+                <View style={[styles.eventStatus, 
+                    event.status === 'completed' 
+                        ? styles.eventStatusCompleted 
+                        : styles.eventStatusUpcoming
+                ]}>
+                    <Text style={styles.eventStatusText}>
+                        {event.status === 'completed' ? 'Completed' : 'Upcoming'}
+                    </Text>
+                </View>
+                <TouchableOpacity style={styles.eventAction}>
+                    <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+            </View>
         </TouchableOpacity>
     );
 
@@ -54,13 +102,7 @@ export default function MyEvents() {
         <ScrollView style={styles.container}>
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
                 <Text style={styles.headerTitle}>My Events</Text>
-                <TouchableOpacity 
-                    style={styles.refreshButton}
-                    onPress={fetchEvents}
-                >
-                    <Ionicons name="refresh-outline" size={22} color="#fff" />
-                    <Text style={styles.refreshText}>Refresh</Text>
-                </TouchableOpacity>
+                <NotificationComponent />
             </View>
 
             <View style={styles.eventsContainer}>
@@ -104,7 +146,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#6366F1',
         paddingBottom: 24,
         paddingHorizontal: 20,
-        marginBottom: 24,
+        marginBottom: 10,
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
         shadowColor: '#6366F1',
@@ -118,16 +160,23 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#FFF',
     },
-    refreshButton: {
+    notificationButton: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         paddingHorizontal: 14,
-        paddingVertical: 10,
+        paddingVertical: 40,  // Add vertical padding
         borderRadius: 25,
+        alignSelf: 'center',  // Center align the button vertically
     },
-    refreshText: {
+    notificationBadge: {
+        backgroundColor: 'red',
+        borderRadius: 12,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
         marginLeft: 6,
+    },
+    notificationBadgeText: {
         color: '#FFF',
         fontWeight: '600',
     },
@@ -138,24 +187,96 @@ const styles = StyleSheet.create({
     },
     eventCard: {
         backgroundColor: 'white',
-        borderRadius: 12,
-        padding: 20,
+        borderRadius: 16,
         marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowColor: '#6366F1',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
         elevation: 3,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(226, 232, 240, 0.8)',
+    },
+    eventCardHeader: {
+        flexDirection: 'row',
+        padding: 16,
+    },
+    eventDateBadge: {
+        width: 60,
+        height: 60,
+        backgroundColor: '#F5F7FF',
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(226, 232, 240, 0.5)',
+    },
+    eventDateDay: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#6366F1',
+    },
+    eventDateMonth: {
+        fontSize: 14,
+        color: '#64748b',
+        textTransform: 'uppercase',
+    },
+    eventDetails: {
+        flex: 1,
+        justifyContent: 'center',
     },
     eventTitle: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#333',
-        marginBottom: 8,
+        color: '#1e293b',
+        marginBottom: 6,
     },
-    eventDate: {
-        fontSize: 16,
-        color: '#666',
+    eventMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    eventMeta: {
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 4,
+    },
+    eventCardFooter: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f1f5f9',
+        backgroundColor: '#FAFBFF',
+    },
+    eventStatus: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    eventStatusUpcoming: {
+        backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    },
+    eventStatusCompleted: {
+        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    },
+    eventStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: '#6366F1',
+    },
+    eventAction: {
+        width: 32,
+        height: 32,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 16,
     },
     noEventsContainer: {
         backgroundColor: 'white',
