@@ -2,10 +2,12 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calendar, ArrowLeft } from "lucide-react" // Removed Search import
+import { Calendar, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import Image from 'next/image'
 import { motion } from "framer-motion"
 import { useRouter } from "next/navigation"
+import notFoundImage from './8102458.png'
 
 export default function EventNotFound() {
   const router = useRouter()
@@ -51,12 +53,14 @@ export default function EventNotFound() {
           <CardHeader className="text-center relative z-10 pt-10">
             <motion.div 
               variants={itemVariants} 
-              className="mx-auto mb-8"
+              className="mx-auto mb-8 relative"
             >
-              <img 
-                src="https://i.postimg.cc/cJ1D7YNB/8102458.webp" 
-                alt="Search Icon" 
-                className="h-32 w-32"
+              <Image 
+                src={notFoundImage}
+                alt="Search Icon"
+                width={128}
+                height={128}
+                priority
               />
             </motion.div>
             <motion.div variants={itemVariants}>

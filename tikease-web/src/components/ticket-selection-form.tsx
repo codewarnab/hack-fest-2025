@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Loader2 } from "lucide-react"
-import { saveRegistrationProgress, getRegistrationProgress, getCookie, COOKIE_NAMES } from "@/lib/cookies"
+import { saveRegistrationProgress, getRegistrationProgress, getCookie } from "@/lib/cookies"
 import { generateTransactionId, formatCurrency } from "@/lib/utils"
 import { useAnalytics } from "@/components/analytics-provider"
 import { createClient } from "../../utils/supabase/client"
@@ -23,6 +23,38 @@ declare global {
   }
 }
 
+// Ticket data moved outside component to prevent re-creation on each render
+const TICKET_DATA = {
+  ticketTypes: [
+    { value: "standard", label: "Standard Pass", price: 49, description: "Access to all conference sessions and keynotes.", maxQuantity: 5 },
+    { value: "premium", label: "Premium Pass", price: 799, description: "Includes standard pass benefits plus VIP lounge access and networking events.", maxQuantity: 3 },
+    { value: "workshop", label: "Workshop Pass", price: 299, description: "Access to pre-conference workshops only.", maxQuantity: 10 },
+  ],
+  addonOptions: [
+    { value: "networking-dinner", label: "Networking Dinner", price: 99, description: "Exclusive dinner with speakers and industry leaders." },
+    { value: "conference-swag", label: "Conference Swag Bag", price: 49, description: "Premium merchandise including t-shirt, notebook, and more." },
+  ],
+  formLabels: {
+    ticketTypeLabel: "Conference Pass Type",
+    addonsLabel: "Optional Add-ons",
+    promoCodeLabel: "Discount Code",
+    quantityLabel: "Number of Tickets"
+  },
+  formDescriptions: {
+    addonsDescription: "Enhance your conference experience.",
+    promoCodeDescription: "Enter your promotional code if you have one."
+  },
+  companyName: "Tickease",
+  eventDescription: "Business Innovation Conference 2024 Ticket Purchase",
+  venueAddress: "Convention Center, New York, NY",
+  validPromoCodes: {
+    TECH25: 25,
+    WELCOME10: 10,
+    EARLYBIRD: 15,
+    VIP2025: 50,
+  }
+};
+
 const formSchema = z.object({
   ticketType: z.string({
     required_error: "Please select a ticket type.",
@@ -30,269 +62,231 @@ const formSchema = z.object({
   quantity: z.number().min(1).max(10),
   addons: z.array(z.string()).optional(),
   promoCode: z.string().optional(),
-})
+});
 
-// Create a single instance of the Supabase client to prevent multiple GoTrueClient instances
+// Create Supabase client once, outside the component
 const supabaseClient = createClient();
 
+// Load Razorpay script only once
+const loadRazorpayScript = () => {
+  return new Promise<void>((resolve, reject) => {
+    if (window.Razorpay) {
+      resolve();
+      return;
+    }
+    
+    if (document.getElementById('razorpay-script')) {
+      const checkInterval = setInterval(() => {
+        if (window.Razorpay) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 100);
+      return;
+    }
+    
+    const script = document.createElement("script");
+    script.id = 'razorpay-script';
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Razorpay SDK"));
+    document.body.appendChild(script);
+  });
+};
+
 export default function TicketSelectionForm() {
-  const router = useRouter()
-  const { trackEvent } = useAnalytics()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formStartTime, setFormStartTime] = useState<number>(Date.now())
-  const [registrationData, setRegistrationData] = useState<any>(null)
-  const [promoCodeValid, setPromoCodeValid] = useState<boolean | null>(null)
-  const [promoDiscount, setPromoDiscount] = useState<number>(0)
+  const router = useRouter();
+  const { trackEvent } = useAnalytics();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formStartTime] = useState<number>(Date.now());
+  const [registrationData, setRegistrationData] = useState<any>(null);
+  const [promoCodeValid, setPromoCodeValid] = useState<boolean | null>(null);
+  const [promoDiscount, setPromoDiscount] = useState<number>(0);
   const [isRazorpayLoaded, setIsRazorpayLoaded] = useState(false);
-  const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [userId, setUserId] = useState<any>(undefined);
   const [eventId, setEventId] = useState<any>(undefined);
-
-  // Default demo event ID to use if none is found in cookies
-
-  useEffect(() => {
-    // Load Razorpay SDK
-    if (!window.Razorpay && !document.getElementById('razorpay-script')) {
-      const script = document.createElement("script");
-      script.id = 'razorpay-script';
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      script.onload = () => {
-        console.log("Razorpay SDK loaded successfully");
-        setIsRazorpayLoaded(true);
-      };
-      script.onerror = () => console.error("Failed to load Razorpay SDK");
-      document.body.appendChild(script);
-    } else if (window.Razorpay) {
-      setIsRazorpayLoaded(true);
-    }
-    
-    // Get the user ID from cookies first, then check localStorage as fallback
-    let userIdFromCookie = getCookie("userId");
-    
-    // If user ID not found in cookie, try localStorage
-    if (!userIdFromCookie) {
-      const localStorageUserId = localStorage.getItem("userId");
-      if (localStorageUserId) {
-        userIdFromCookie = localStorageUserId;
-        // Save to cookie for future consistency
-        document.cookie = `userId=${localStorageUserId}; path=/; max-age=86400`;
-      }
-    }
-    
-    // Try to get event ID from cookies or URL parameters
-    let eventIdFromCookie = localStorage.getItem("EventId");
-    
-    setUserId(userIdFromCookie);
-    setEventId(eventIdFromCookie);
-    
-    console.log("User ID from cookie or localStorage:", userIdFromCookie);
-    console.log("Event ID from cookie or default:", eventIdFromCookie);
-  }, []);
-
-  const dummyTicketData = {
-    ticketTypes: [
-      { value: "standard", label: "Standard Pass", price: 49, description: "Access to all conference sessions and keynotes.", maxQuantity: 5 },
-      { value: "premium", label: "Premium Pass", price: 799, description: "Includes standard pass benefits plus VIP lounge access and networking events.", maxQuantity: 3 },
-      { value: "workshop", label: "Workshop Pass", price: 299, description: "Access to pre-conference workshops only.", maxQuantity: 10 },
-    ],
-    addonOptions: [
-      { value: "networking-dinner", label: "Networking Dinner", price: 99, description: "Exclusive dinner with speakers and industry leaders." },
-      { value: "conference-swag", label: "Conference Swag Bag", price: 49, description: "Premium merchandise including t-shirt, notebook, and more." },
-    ],
-    formLabels: {
-      ticketTypeLabel: "Conference Pass Type",
-      addonsLabel: "Optional Add-ons",
-      promoCodeLabel: "Discount Code",
-      quantityLabel: "Number of Tickets"
-    },
-    formDescriptions: {
-      addonsDescription: "Enhance your conference experience.",
-      promoCodeDescription: "Enter your promotional code if you have one."
-    },
-    companyName: "Tickease",
-    eventDescription: "Business Innovation Conference 2024 Ticket Purchase",
-    venueAddress: "Convention Center, New York, NY",
-    validPromoCodes: {
-      TECH25: 25,
-      WELCOME10: 10,
-      EARLYBIRD: 15,
-      VIP2025: 50,
-    }
-  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      ticketType: dummyTicketData.ticketTypes[0]?.value || "",
+      ticketType: TICKET_DATA.ticketTypes[0]?.value || "",
       quantity: 1,
       addons: [],
       promoCode: "",
     },
-  })
+  });
 
-  const watchTicketType = form.watch("ticketType")
-  const watchQuantity = form.watch("quantity")
-  const watchAddons = form.watch("addons") || []
-  const watchPromoCode = form.watch("promoCode")
+  const watchTicketType = form.watch("ticketType");
+  const watchQuantity = form.watch("quantity");
+  const watchAddons = form.watch("addons") || [];
+  const watchPromoCode = form.watch("promoCode");
 
+  // Initialize user data and load Razorpay
   useEffect(() => {
-    const savedProgress = getRegistrationProgress()
+    // Load Razorpay SDK
+    loadRazorpayScript()
+      .then(() => {
+        console.log("Razorpay SDK loaded successfully");
+        setIsRazorpayLoaded(true);
+      })
+      .catch(error => console.error(error));
+    
+    // Get user and event IDs
+    const userIdFromCookie = localStorage.getItem("userId");
+    const eventIdFromStorage = localStorage.getItem("EventId");
+    console.log("User ID from cookie:", userIdFromCookie, "\nEvent ID from storage:", eventIdFromStorage);
+    setUserId(userIdFromCookie);
+    setEventId(eventIdFromStorage);
+  }, []);
+
+  // Load saved progress and track form start
+  useEffect(() => {
+    const savedProgress = getRegistrationProgress();
     if (savedProgress.ticketSelection) {
-      form.reset(savedProgress.ticketSelection)
+      form.reset(savedProgress.ticketSelection);
     }
 
-    const registrationDataStr = sessionStorage.getItem("registrationData")
+    const registrationDataStr = sessionStorage.getItem("registrationData");
     if (registrationDataStr) {
-      setRegistrationData(JSON.parse(registrationDataStr))
+      setRegistrationData(JSON.parse(registrationDataStr));
     }
 
     trackEvent("form_start", {
       formName: "ticket_selection",
       timestamp: new Date().toISOString(),
-    })
+    });
 
-    setFormStartTime(Date.now())
-
+    // Add field interaction tracking
     const handleFieldInteraction = (fieldName: string) => {
       trackEvent("form_field_interaction", {
         formName: "ticket_selection",
         fieldName,
         timestamp: new Date().toISOString(),
-      })
-    }
+      });
+    };
 
-    const formElement = document.querySelector("form")
+    const formElement = document.querySelector("form");
     if (formElement) {
-      const inputElements = formElement.querySelectorAll("input, select, textarea")
+      const inputElements = formElement.querySelectorAll("input, select, textarea");
       inputElements.forEach((element) => {
         element.addEventListener("focus", () => {
-          handleFieldInteraction(element.getAttribute("name") || "unknown")
-        })
-      })
+          handleFieldInteraction(element.getAttribute("name") || "unknown");
+        });
+      });
     }
 
     return () => {
       if (formElement) {
-        const inputElements = formElement.querySelectorAll("input, select, textarea")
+        const inputElements = formElement.querySelectorAll("input, select, textarea");
         inputElements.forEach((element) => {
-          element.removeEventListener("focus", () => {})
-        })
+          element.removeEventListener("focus", () => {});
+        });
       }
-    }
-  }, [form, trackEvent])
+    };
+  }, [form, trackEvent]);
 
+  // Save form progress on changes
   useEffect(() => {
     const subscription = form.watch((value) => {
-      saveRegistrationProgress("ticketSelection", value)
-    })
+      saveRegistrationProgress("ticketSelection", value);
+    });
 
-    return () => subscription.unsubscribe()
-  }, [form])
+    return () => subscription.unsubscribe();
+  }, [form]);
 
+  // Reset quantity when ticket type changes
   useEffect(() => {
-    if (watchPromoCode && watchPromoCode.length > 0) {
-      const validPromoCodes = dummyTicketData.validPromoCodes;
-      const code = watchPromoCode.toUpperCase()
+    const ticketType = TICKET_DATA.ticketTypes.find(type => type.value === watchTicketType);
+    if (ticketType) {
+      form.setValue("quantity", 1);
+    }
+  }, [watchTicketType, form]);
 
-      if (validPromoCodes[code as keyof typeof validPromoCodes]) {
-        setPromoCodeValid(true)
-        setPromoDiscount(validPromoCodes[code as keyof typeof validPromoCodes])
+  // Handle promo code validation
+  useEffect(() => {
+    if (!watchPromoCode || watchPromoCode.length === 0) {
+      setPromoCodeValid(null);
+      setPromoDiscount(0);
+      return;
+    }
 
-        trackEvent("promo_code_applied", {
-          code: code,
-          discount: validPromoCodes[code as keyof typeof validPromoCodes],
-          ticketType: watchTicketType,
-        })
-      } else if (watchPromoCode.length >= 5) {
-        setPromoCodeValid(false)
-        setPromoDiscount(0)
+    const code = watchPromoCode.toUpperCase();
+    const discount = TICKET_DATA.validPromoCodes[code as keyof typeof TICKET_DATA.validPromoCodes];
 
-        trackEvent("promo_code_invalid", {
-          code: watchPromoCode,
-          ticketType: watchTicketType,
-        })
-      } else {
-        setPromoCodeValid(null)
-        setPromoDiscount(0)
-      }
+    if (discount) {
+      setPromoCodeValid(true);
+      setPromoDiscount(discount);
+      trackEvent("promo_code_applied", {
+        code,
+        discount,
+        ticketType: watchTicketType,
+      });
+    } else if (watchPromoCode.length >= 5) {
+      setPromoCodeValid(false);
+      setPromoDiscount(0);
+      trackEvent("promo_code_invalid", {
+        code: watchPromoCode,
+        ticketType: watchTicketType,
+      });
     } else {
-      setPromoCodeValid(null)
-      setPromoDiscount(0)
+      setPromoCodeValid(null);
+      setPromoDiscount(0);
     }
-  }, [watchPromoCode, watchTicketType, trackEvent])
+  }, [watchPromoCode, watchTicketType, trackEvent]);
 
-  const getTicketPrice = (ticketTypeValue: string) => {
-    const foundTicketType = dummyTicketData.ticketTypes.find(type => type.value === ticketTypeValue);
+  // Price calculation functions with memoization
+  const getTicketPrice = useCallback((ticketTypeValue: string) => {
+    const foundTicketType = TICKET_DATA.ticketTypes.find(type => type.value === ticketTypeValue);
     return foundTicketType ? foundTicketType.price : 0;
-  }
+  }, []);
 
-  const getAddonPrice = (addonValue: string) => {
-    const foundAddon = dummyTicketData.addonOptions.find(addon => addon.value === addonValue);
+  const getAddonPrice = useCallback((addonValue: string) => {
+    const foundAddon = TICKET_DATA.addonOptions.find(addon => addon.value === addonValue);
     return foundAddon ? foundAddon.price : 0;
-  }
+  }, []);
 
-  const calculateSubtotal = () => {
+  const calculateSubtotal = useCallback(() => {
     const ticketTotal = getTicketPrice(watchTicketType) * watchQuantity;
-
     const addonTotal = watchAddons.reduce((total, addon) => {
-      return total + (getAddonPrice(addon) || 0)
-    }, 0)
+      return total + getAddonPrice(addon);
+    }, 0);
+    return ticketTotal + addonTotal;
+  }, [watchTicketType, watchQuantity, watchAddons, getTicketPrice, getAddonPrice]);
 
-    return ticketTotal + addonTotal
-  }
+  const calculateDiscount = useCallback(() => {
+    if (!promoCodeValid) return 0;
+    const subtotal = calculateSubtotal();
+    return promoDiscount < 100 
+      ? Math.round((subtotal * promoDiscount) / 100) 
+      : Math.min(promoDiscount, subtotal);
+  }, [promoCodeValid, promoDiscount, calculateSubtotal]);
 
-  const calculateDiscount = () => {
-    if (!promoCodeValid) return 0
+  const calculateTotal = useCallback(() => {
+    return calculateSubtotal() - calculateDiscount();
+  }, [calculateSubtotal, calculateDiscount]);
 
-    const subtotal = calculateSubtotal()
-
-    if (promoDiscount < 100) {
-      return Math.round((subtotal * promoDiscount) / 100)
-    }
-
-    return Math.min(promoDiscount, subtotal)
-  }
-
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal()
-    const discount = calculateDiscount()
-
-    return subtotal - discount
-  }
-
-  const saveTransactionToDatabase = async (transactionData: any, status: string = "pending") => {
+  // Database functions
+  const saveTransactionToDatabase = useCallback(async (transactionData: any, status: string = "pending") => {
     try {
-      console.log("Starting saveTransactionToDatabase with data:", JSON.stringify(transactionData));
-      console.log("Transaction status:", status);
-      
       if (!userId || !eventId) {
-        console.error("Missing user ID or event ID from cookies");
         return { success: false, error: "Missing user ID or event ID" };
       }
       
-      const currentDate = new Date();
-      console.log("Current date object:", currentDate);
-      console.log("Current date ISO string:", currentDate.toISOString());
-      console.log("Current date timestamp:", currentDate.getTime());
-      
-      // Fix: Convert addons array to PostgreSQL array format using the array_to_string function
       const transactionRecord = {
         transaction_id: transactionData.transactionId,
         event_id: eventId,
         user_id: userId,
         ticket_type: transactionData.ticketType,
         quantity: transactionData.quantity.toString(),
-        // Fix: Store addons as a proper PostgreSQL array
-        addons: transactionData.addons || [],  // Send as a true array, not as a JSON string
+        addons: transactionData.addons || [],
         total_amount: transactionData.totalPrice.toString(),
         payment_method: transactionData.paymentMethod || "Razorpay",
         discount: transactionData.discount ? transactionData.discount.toString() : "0.00",
         promo_code: transactionData.promoCode || null,
         status: status,
-        timestamp: currentDate.toISOString()
+        timestamp: new Date().toISOString()
       };
-      
-      console.log("Transaction record to be inserted:", JSON.stringify(transactionRecord));
       
       const { data, error } = await supabaseClient
         .from('transactions')
@@ -305,30 +299,36 @@ export default function TicketSelectionForm() {
         return { success: false, error: error.message };
       }
       
-      console.log("Transaction saved successfully:", data);
       return { success: true, data };
     } catch (error) {
       console.error("Transaction save error:", error);
       return { success: false, error: String(error) };
     }
-  };
+  }, [userId, eventId]);
 
-  const updateTransactionStatus = async (transactionId: string, status: string, paymentDetails?: any) => {
+  // Function to fetch payment details from our API endpoint that proxies Razorpay
+  const fetchRazorpayPaymentDetails = useCallback(async (paymentId: string) => {
     try {
-      console.log("Starting updateTransactionStatus for transaction:", transactionId);
-      console.log("New status:", status);
-      console.log("Payment details:", paymentDetails ? JSON.stringify(paymentDetails) : "None");
+      const response = await fetch(`/api/payment-details?paymentId=${paymentId}`);
       
-      const updateData: any = {
-        status: status,
-      };
-      
-      // If payment details are provided, add them to the update
-      if (paymentDetails) {
-        updateData.payment_details = JSON.stringify(paymentDetails);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch payment details: ${response.status}`);
       }
       
-      console.log("Update data being sent to Supabase:", JSON.stringify(updateData));
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching Razorpay payment details:", error);
+      return null;
+    }
+  }, []);
+
+  const updateTransactionStatus = useCallback(async (transactionId: string, status: string, paymentDetails?: any) => {
+    try {
+      const updateData: any = { status };
+      
+      if (paymentDetails) {
+        updateData.payment_details = paymentDetails;
+      }
       
       const { data, error } = await supabaseClient
         .from('transactions')
@@ -342,15 +342,15 @@ export default function TicketSelectionForm() {
         return { success: false, error: error.message };
       }
       
-      console.log("Transaction updated successfully:", data);
       return { success: true, data };
     } catch (error) {
       console.error("Transaction update error:", error);
       return { success: false, error: String(error) };
     }
-  };
+  }, []);
 
-  const initiateRazorpayPayment = async (values: z.infer<typeof formSchema>) => {
+  // Payment handling
+  const initiateRazorpayPayment = useCallback(async (values: z.infer<typeof formSchema>) => {
     if (!isRazorpayLoaded) {
       alert("Razorpay SDK is not loaded. Please try again.");
       return;
@@ -367,23 +367,20 @@ export default function TicketSelectionForm() {
         ...values,
         subtotal: calculateSubtotal(),
         discount: calculateDiscount(),
-        totalPrice: calculateTotal(),
+        totalPrice: totalAmount,
         purchaseDate: new Date().toISOString(),
         transactionId: transactionId,
         timeSpentOnForm: Math.floor((Date.now() - formStartTime) / 1000),
         paymentMethod: "Razorpay",
       };
       
-      // First create a pending transaction record
+      // Create pending transaction record
       const initialSaveResult = await saveTransactionToDatabase(completeTicketData, "pending");
       if (!initialSaveResult.success) {
-        console.error("Failed to create pending transaction record:", initialSaveResult.error);
         alert("Failed to process your order. Please try again.");
         setIsSubmitting(false);
         return;
       }
-      
-      console.log("Pending transaction saved:", initialSaveResult.data);
 
       const res = await fetch("/api/pay", {
         method: "POST",
@@ -397,32 +394,28 @@ export default function TicketSelectionForm() {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: order.currency,
-        name: dummyTicketData.companyName,
-        description: dummyTicketData.eventDescription,
+        name: TICKET_DATA.companyName,
+        description: TICKET_DATA.eventDescription,
         order_id: order.id,
         handler: async function (response: any) {
           // Payment successful - update transaction status
           const razorpayPaymentId = response.razorpay_payment_id;
           
-          // Update transaction with payment details
-          const updateResult = await updateTransactionStatus(
+          // Fetch complete payment details from Razorpay API
+          const paymentDetails = await fetchRazorpayPaymentDetails(razorpayPaymentId);
+          
+          // Update transaction with complete payment details
+          await updateTransactionStatus(
             transactionId, 
             "completed",
-            {
+            paymentDetails || {
+              // Fallback to basic payment details if API call fails
               razorpay_payment_id: razorpayPaymentId,
               razorpay_order_id: order.id,
               razorpay_signature: response.razorpay_signature,
               payment_time: new Date().toISOString()
             }
           );
-          
-          if (!updateResult.success) {
-            console.error("Failed to update transaction status:", updateResult.error);
-          } else {
-            console.log("Transaction status updated to completed:", updateResult.data);
-          }
-
-          alert(`Payment successful: ${razorpayPaymentId}`);
 
           trackEvent("purchase_completed", {
             transactionId,
@@ -441,15 +434,17 @@ export default function TicketSelectionForm() {
           };
           
           sessionStorage.setItem("ticketData", JSON.stringify(finalTicketData));
-          console.log("Ticket data stored in session storage:", finalTicketData);
+          alert(`Payment successful: ${razorpayPaymentId}`);
           router.push("/confirmation");
         },
         prefill: {
-          name: registrationData?.firstName + " " + registrationData?.lastName || "Guest User",
+          name: registrationData?.firstName && registrationData?.lastName 
+            ? `${registrationData.firstName} ${registrationData.lastName}` 
+            : "Guest User",
           email: registrationData?.email || "guest@example.com",
         },
         notes: {
-          address: dummyTicketData.venueAddress,
+          address: TICKET_DATA.venueAddress,
           transaction_id: transactionId,
         },
         theme: {
@@ -494,18 +489,28 @@ export default function TicketSelectionForm() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [
+    isRazorpayLoaded, 
+    calculateTotal, 
+    calculateSubtotal, 
+    calculateDiscount, 
+    formStartTime, 
+    saveTransactionToDatabase, 
+    updateTransactionStatus,
+    fetchRazorpayPaymentDetails,
+    trackEvent, 
+    registrationData, 
+    router
+  ]);
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  const onSubmit = useCallback((values: z.infer<typeof formSchema>) => {
     initiateRazorpayPayment(values);
-  }
+  }, [initiateRazorpayPayment]);
 
-  useEffect(() => {
-    const ticketType = dummyTicketData.ticketTypes.find(type => type.value === watchTicketType);
-    if (ticketType) {
-      form.setValue("quantity", 1);
-    }
-  }, [watchTicketType])
+  // Selected ticket type data
+  const selectedTicketType = useMemo(() => 
+    TICKET_DATA.ticketTypes.find(t => t.value === watchTicketType) || TICKET_DATA.ticketTypes[0],
+  [watchTicketType]);
 
   return (
     <Form {...form}>
@@ -515,10 +520,10 @@ export default function TicketSelectionForm() {
           name="ticketType"
           render={({ field }) => (
             <FormItem className="space-y-3">
-              <FormLabel>{dummyTicketData.formLabels.ticketTypeLabel}</FormLabel>
+              <FormLabel>{TICKET_DATA.formLabels.ticketTypeLabel}</FormLabel>
               <FormControl>
                 <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-3">
-                  {dummyTicketData.ticketTypes.map((type) => (
+                  {TICKET_DATA.ticketTypes.map((type) => (
                     <FormItem key={type.value} className="flex items-center space-x-3 space-y-0">
                       <FormControl>
                         <RadioGroupItem value={type.value} />
@@ -541,17 +546,17 @@ export default function TicketSelectionForm() {
           name="quantity"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{dummyTicketData.formLabels.quantityLabel}</FormLabel>
-                <FormControl>
+              <FormLabel>{TICKET_DATA.formLabels.quantityLabel}</FormLabel>
+              <FormControl>
                 <Input
                   type="number"
                   min={1}
-                  max={dummyTicketData.ticketTypes.find(t => t.value === watchTicketType)?.maxQuantity}
+                  max={selectedTicketType?.maxQuantity}
                   {...field}
                   onChange={(e) => field.onChange(Number.parseInt(e.target.value))}
                 />
-                </FormControl>
-              <FormDescription>Maximum {dummyTicketData.ticketTypes.find(t => t.value === watchTicketType)?.maxQuantity} tickets per order</FormDescription>
+              </FormControl>
+              <FormDescription>Maximum {selectedTicketType?.maxQuantity} tickets per order</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -563,11 +568,11 @@ export default function TicketSelectionForm() {
           render={() => (
             <FormItem>
               <div className="mb-4">
-                <FormLabel>{dummyTicketData.formLabels.addonsLabel}</FormLabel>
-                <FormDescription>{dummyTicketData.formDescriptions.addonsDescription}</FormDescription>
+                <FormLabel>{TICKET_DATA.formLabels.addonsLabel}</FormLabel>
+                <FormDescription>{TICKET_DATA.formDescriptions.addonsDescription}</FormDescription>
               </div>
               <div className="space-y-4">
-                {dummyTicketData.addonOptions.map((addon) => (
+                {TICKET_DATA.addonOptions.map((addon) => (
                   <FormField
                     key={addon.value}
                     control={form.control}
@@ -605,7 +610,7 @@ export default function TicketSelectionForm() {
           name="promoCode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{dummyTicketData.formLabels.promoCodeLabel}</FormLabel>
+              <FormLabel>{TICKET_DATA.formLabels.promoCodeLabel}</FormLabel>
               <div className="flex items-center space-x-2">
                 <FormControl>
                   <Input placeholder="Enter promo code" {...field} />
@@ -617,7 +622,7 @@ export default function TicketSelectionForm() {
                 )}
                 {promoCodeValid === false && <span className="text-red-500 text-sm">Invalid code</span>}
               </div>
-              <FormDescription>{dummyTicketData.formDescriptions.promoCodeDescription}</FormDescription>
+              <FormDescription>{TICKET_DATA.formDescriptions.promoCodeDescription}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -627,14 +632,14 @@ export default function TicketSelectionForm() {
           <CardContent className="p-4">
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span>Ticket ({dummyTicketData.ticketTypes.find(t => t.value === watchTicketType)?.label || 'N/A'})</span>
+                <span>Ticket ({selectedTicketType?.label || 'N/A'})</span>
                 <span>
                   {formatCurrency(getTicketPrice(watchTicketType))} × {watchQuantity}
                 </span>
               </div>
 
               {watchAddons.map((addonValue) => {
-                const addon = dummyTicketData.addonOptions.find(ao => ao.value === addonValue);
+                const addon = TICKET_DATA.addonOptions.find(ao => ao.value === addonValue);
                 return addon ? (
                   <div key={addon.value} className="flex justify-between">
                     <span>{addon.label}</span>

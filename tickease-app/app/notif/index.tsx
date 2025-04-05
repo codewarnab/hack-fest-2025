@@ -75,7 +75,7 @@ export default function NotificationComponent() {
     const unreadCount = notifications.filter(notification => !notification.read).length;
 
     const markAsRead = (id) => {
-        setNotifications(notifications.map(notification => 
+        setNotifications(notifications.map(notification =>
             notification.id === id ? { ...notification, read: true } : notification
         ));
     };
@@ -129,9 +129,9 @@ export default function NotificationComponent() {
 
     const handleNotificationAction = (notification) => {
         markAsRead(notification.id);
-        
+
         // Different actions based on notification type
-        switch(notification.type) {
+        switch (notification.type) {
             case 'suggestion':
                 Alert.alert(
                     'Review Low Priority Issue?',
@@ -169,7 +169,7 @@ export default function NotificationComponent() {
     };
 
     const getIconName = (type) => {
-        switch(type) {
+        switch (type) {
             case 'suggestion': return 'bulb';
             case 'info': return 'information-circle';
             case 'opportunity': return 'star';
@@ -179,7 +179,7 @@ export default function NotificationComponent() {
     };
 
     const getIconColor = (type) => {
-        switch(type) {
+        switch (type) {
             case 'suggestion': return '#6366F1';
             case 'info': return '#3B82F6';
             case 'opportunity': return '#F59E0B';
@@ -191,8 +191,8 @@ export default function NotificationComponent() {
     return (
         <View style={styles.container}>
             {/* Notification Bell Icon */}
-            <TouchableOpacity 
-                style={styles.notificationIcon} 
+            <TouchableOpacity
+                style={styles.notificationIcon}
                 onPress={() => setShowNotifications(true)}
             >
                 <Ionicons name="notifications" size={24} color="#6366F1" />
@@ -255,7 +255,7 @@ export default function NotificationComponent() {
                                 </View>
                             ) : (
                                 notifications.map(notification => (
-                                    <TouchableOpacity 
+                                    <TouchableOpacity
                                         key={notification.id}
                                         style={[
                                             styles.notificationItem,
@@ -264,10 +264,10 @@ export default function NotificationComponent() {
                                         onPress={() => handleNotificationAction(notification)}
                                     >
                                         <View style={styles.notificationIconContainer}>
-                                            <Ionicons 
-                                                name={getIconName(notification.type)} 
-                                                size={24} 
-                                                color={getIconColor(notification.type)} 
+                                            <Ionicons
+                                                name={getIconName(notification.type)}
+                                                size={24}
+                                                color={getIconColor(notification.type)}
                                             />
                                         </View>
                                         <View style={styles.notificationContent}>
@@ -313,8 +313,8 @@ export default function NotificationComponent() {
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: 20,
-        right: 20,
+        top: "80%",
+        right: "10%",
         zIndex: 1000,
         marginTop: 20,
     },

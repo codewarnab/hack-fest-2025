@@ -1,56 +1,54 @@
 import React, { useState, useEffect } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ScrollView,
-    ActivityIndicator,
-    RefreshControl, // Import RefreshControl
-    Platform,
-} from 'react-native';
-import { supabase } from '../../utils/supabase'; // Ensure path is correct
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
+import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import NotificationComponent from '../notif/index'; // Ensure path is correct
-
-// Define a type for your event data for better type safety
-interface EventType {
-    id: string;
-    title: string | null;
-    date: string | null;
-    time?: string | null;
-    status?: 'upcoming' | 'completed' | string | null;
-    created_at?: string;
-    // Add any other relevant fields from your 'events' table
-}
+import NotificationComponent from '../notif';
+import { fetchUserEvents } from '@/utils/functions'; // Import the utility function
 
 export default function MyEvents() {
     const insets = useSafeAreaInsets();
-    const [events, setEvents] = useState<EventType[]>([]);
+    const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false); // State for pull-to-refresh
 
     useEffect(() => {
-        fetchEvents();
+        loadEvents();
     }, []);
 
-    const fetchEvents = async (isRefreshing = false) => {
-        if (!isRefreshing) {
-             setLoading(true);
-        }
+    // Function to validate if an event has all required fields
+    const isValidEvent = (event) => {
+        const requiredFields = [
+            'title',
+            'description',
+            'venue',
+            'image',
+            'category',
+            'eventDate', // Using eventDate instead of date
+            'eventTime', // Using eventTime instead of time
+            'form_schema'
+        ];
+
+        return requiredFields.every(field =>
+            event[field] !== undefined &&
+            event[field] !== null &&
+            event[field] !== ''
+        );
+    };
+
+    // Updated function to load events using the utility function
+    async function loadEvents() {
         try {
-            const { data, error } = await supabase
-                .from('events')
-                .select('*')
-                .order('created_at', { ascending: false });
+            setLoading(true);
+            const { events, error } = await fetchUserEvents();
 
             if (error) {
                 console.error('Error fetching events:', error);
                 // TODO: Add user-facing error handling (e.g., Toast)
             } else {
-                setEvents(data || []);
+                setEvents(events);
             }
         } catch (error) {
             console.error('Unexpected error fetching events:', error);
@@ -73,146 +71,129 @@ export default function MyEvents() {
         router.push('/landing_form');
     };
 
-    // --- EventItem Component ---
-    const EventItem = React.memo(({ event }: { event: EventType }) => { // Memoize for performance
-        const handlePress = () => {
-            router.push(`/overview/${event.id}`);
-        };
-
-        const eventDate = event.date ? new Date(event.date) : null;
-
-        return (
-            <TouchableOpacity
-                style={styles.eventCard}
-                onPress={handlePress}
-                activeOpacity={0.8} // Slightly more feedback
-            >
-                 {/* Card content remains largely the same as before */}
-                <View style={styles.eventCardHeader}>
-                    {eventDate ? (
-                        <View style={styles.eventDateBadge}>
-                            <Text style={styles.eventDateDay}>
-                                {eventDate.getDate()}
-                            </Text>
-                            <Text style={styles.eventDateMonth}>
-                                {eventDate.toLocaleString('default', { month: 'short' })}
-                            </Text>
-                        </View>
-                    ) : (
-                        <View style={styles.eventDateBadge}>
-                            <Ionicons name="calendar-clear-outline" size={28} color="#6366F1" />
-                        </View>
-                    )}
-                    <View style={styles.eventDetails}>
-                        <Text style={styles.eventTitle} numberOfLines={1} ellipsizeMode="tail">
-                            {event.title || 'Untitled Event'}
+    const EventItem = ({ event }) => (
+        <TouchableOpacity
+            style={styles.eventCard}
+            onPress={() => router.push(`/account`)}
+        >
+            <View style={styles.eventCardHeader}>
+                {event.eventDate ? (
+                    <View style={styles.eventDateBadge}>
+                        <Text style={styles.eventDateDay}>
+                            {new Date(event.eventDate).getDate()}
                         </Text>
-                        <View style={styles.eventMetaRow}>
-                            <Ionicons name="calendar-outline" size={14} color="#64748b" />
-                            <Text style={styles.eventMeta} numberOfLines={1}>
-                                {eventDate
-                                    ? eventDate.toLocaleDateString()
-                                    : 'Date TBA'}
-                            </Text>
-                        </View>
-                        {event.time && (
-                            <View style={styles.eventMetaRow}>
-                                <Ionicons name="time-outline" size={14} color="#64748b" />
-                                <Text style={styles.eventMeta}>
-                                    {event.time}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                </View>
-                <View style={styles.eventCardFooter}>
-                    <View style={[styles.eventStatus,
-                        event.status === 'completed'
-                            ? styles.eventStatusCompleted
-                            : styles.eventStatusUpcoming
-                    ]}>
-                         <Text style={[
-                            styles.eventStatusText,
-                             event.status === 'completed'
-                                ? styles.eventStatusTextCompleted
-                                : styles.eventStatusTextUpcoming
-                        ]}>
-                            {event.status ? event.status.charAt(0).toUpperCase() + event.status.slice(1) : 'Upcoming'}
+                        <Text style={styles.eventDateMonth}>
+                            {new Date(event.eventDate).toLocaleString('default', { month: 'short' })}
                         </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color="#94a3b8" />
+                ) : (
+                    <View style={styles.eventDateBadge}>
+                        <Ionicons name="calendar" size={28} color="#6366F1" />
+                    </View>
+                )}
+                <View style={styles.eventDetails}>
+                    <Text style={styles.eventTitle} numberOfLines={1} ellipsizeMode="tail">
+                        {event.title || 'Untitled Event'}
+                    </Text>
+                    <View style={styles.eventMetaRow}>
+                        <Ionicons name="calendar-outline" size={14} color="#6366F1" />
+                        <Text style={styles.eventMeta} numberOfLines={1}>
+                            {event.eventDate
+                                ? new Date(event.eventDate).toLocaleDateString()
+                                : 'Date to be announced'}
+                        </Text>
+                    </View>
+                    <View style={styles.eventMetaRow}>
+                        <Ionicons name="time-outline" size={14} color="#6366F1" />
+                        <Text style={styles.eventMeta}>
+                            {event.eventTime || 'Time to be announced'}
+                        </Text>
+                    </View>
                 </View>
-            </TouchableOpacity>
-        );
-    });
-
+            </View>
+            <View style={styles.eventCardFooter}>
+                <View style={[styles.eventStatus,
+                event.status === 'completed'
+                    ? styles.eventStatusCompleted
+                    : styles.eventStatusUpcoming
+                ]}>
+                    <Text style={styles.eventStatusText}>
+                        {event.status === 'completed' ? 'Completed' : 'Upcoming'}
+                    </Text>
+                </View>
+                <TouchableOpacity style={styles.eventAction}>
+                    <Ionicons name="chevron-forward" size={18} color="#94a3b8" />
+                </TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+    );
 
     // --- Main Component Render ---
     return (
-        <View style={styles.fullScreenContainer}>
-            {/* Add button positioned at the top above all components */}
-            <TouchableOpacity
-                style={[styles.fab, { top: insets.top + 20, right: 20 }]} // Position at top right
-                onPress={navigateToCreateEvent}
-                activeOpacity={0.8}
-            >
-                <Ionicons name="add" size={30} color="white" />
-            </TouchableOpacity>
+        <View style={styles.mainContainer}>
+            <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+                <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+                    <Text style={styles.headerTitle}>My Events</Text>
+                    <NotificationComponent />
+                </View>
 
-            {/* Header is now outside the ScrollView */}
-            <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <Text style={styles.headerTitle}>My Events</Text>
-                <NotificationComponent />
-            </View>
-
-            {/* ScrollView only contains the event list */}
-            <ScrollView
-                style={styles.scrollViewStyle}
-                contentContainerStyle={styles.scrollContentContainer}
-                showsVerticalScrollIndicator={false}
-                // Add pull-to-refresh functionality
-                 refreshControl={
-                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />
-                 }
-                 keyboardShouldPersistTaps="handled" // Good practice for ScrollViews
-            >
                 <View style={styles.eventsContainer}>
-                    {loading && !refreshing ? ( // Show loading only on initial load
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#6366F1" />
-                            <Text style={styles.loadingText}>Loading events...</Text>
-                        </View>
-                    ) : events.length > 0 ? (
+                    {events.length > 0 ? (
                         events.map((event) => (
                             <EventItem key={event.id} event={event} />
                         ))
                     ) : (
                         <View style={styles.noEventsContainer}>
-                            <Ionicons name="calendar-outline" size={52} color="#cbd5e1" style={styles.noEventsIcon} />
-                            <Text style={styles.noEventsText}>
-                                No events found
-                            </Text>
-                            <Text style={styles.noEventsSubText}>Tap the '+' button above to create your first event!</Text>
+                            {loading ? (
+                                <Text style={styles.noEventsText}>Loading events...</Text>
+                            ) : (
+                                <>
+                                    <Image
+                                        source={require('@/assets/images/noeventfound.svg')}
+                                        style={styles.noEventsImage}
+                                        contentFit="contain"
+                                    />
+                                    <Text style={styles.noEventsText}>
+                                        No events found. Create one with all required fields!
+                                    </Text>
+                                </>
+                            )}
                         </View>
                     )}
                 </View>
+                {/* Add extra padding at the bottom to ensure content isn't hidden behind FAB */}
+                <View style={{ height: 100 }} />
             </ScrollView>
+
+            {/* Responsive FAB with tooltip */}
+            <View style={styles.fabWrapper}>
+                <View style={styles.fabTooltipContainer}>
+                    <Text style={styles.fabTooltipText}>Tap to Create a new Event</Text>
+                </View>
+                <TouchableOpacity
+                    style={styles.fab}
+                    onPress={navigateToCreateEvent}
+                    activeOpacity={0.7}
+                >
+                    <Text style={styles.fabIcon}>+</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
 
 // --- Styles ---
 const styles = StyleSheet.create({
-    fullScreenContainer: {
+    mainContainer: {
         flex: 1,
-        backgroundColor: '#F8FAFC', // Background for the whole screen
+        position: 'relative',
     },
-    scrollViewStyle: {
-        flex: 1, // Takes remaining space below header
+    container: {
+        flex: 1,
+        backgroundColor: '#F5F7FF',
     },
-    scrollContentContainer: {
-       paddingBottom: 40, // Space at the bottom
-       paddingTop: 10, // Space below the header before list starts
+    scrollContent: {
+        flexGrow: 1,
     },
     header: {
         flexDirection: 'row',
@@ -238,8 +219,8 @@ const styles = StyleSheet.create({
     },
     eventsContainer: {
         flex: 1,
-        paddingHorizontal: 16,
-        // paddingTop: 20, // Moved padding to scrollContentContainer
+        paddingHorizontal: 20,
+        paddingBottom: 20,
     },
     eventCard: {
         backgroundColor: 'white',
@@ -345,42 +326,68 @@ const styles = StyleSheet.create({
         marginTop: 60, // More margin top
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 30,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        marginTop: 40,
     },
-     noEventsIcon: {
-         marginBottom: 10, // Space below icon
-     },
     noEventsText: {
         fontSize: 17, // Slightly larger
         color: '#475569',
         textAlign: 'center',
-        marginTop: 16,
-        fontWeight: '600', // Bolder
     },
-     noEventsSubText: {
-        fontSize: 14,
-        color: '#64748b',
+    fabWrapper: {
+        position: 'absolute',
+        alignItems: 'center',
+        right: '1%', // Use percentage instead of fixed pixels for responsive positioning
+        bottom: '12%', // Use percentage for responsive positioning
+        zIndex: 999,
+    },
+    fabTooltipContainer: {
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 12,
+        padding: 10,
+        marginBottom: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+        maxWidth: 160,
+    },
+    fabTooltipText: {
+        fontSize: 13,
         textAlign: 'center',
         marginTop: 8,
         lineHeight: 20, // Improved readability
     },
     // --- FAB Styling ---
     fab: {
-        position: 'absolute', // Position absolutely relative to fullScreenContainer
-        // top: // Set dynamically using insets
-        // right: 20, // Set dynamically
-        width: 56, // Standard FAB size
-        height: 56,
-        borderRadius: 28, // Make it circular
-        backgroundColor: '#4F46E5',
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#6366F1',
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#4338CA',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 8,
-        zIndex: 999, // Ensure it's above everything else
+        shadowRadius: 8,
+        elevation: 6,
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
     },
-    // Removed fabContainer and tooltip styles as FAB is now directly positioned
+    fabIcon: {
+        fontSize: 32,
+        color: 'white',
+        fontWeight: 'bold',
+        marginTop: -2,
+    },
+    noEventsImage: {
+        width: 200,
+        height: 200,
+        marginBottom: 20,
+    },
 });
