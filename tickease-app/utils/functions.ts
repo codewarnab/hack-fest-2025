@@ -59,3 +59,4 @@ const updateProfile = async (userId: string, profileData: UserProfile) => {
 }
 
 export default updateProfile;
+
