@@ -120,7 +120,7 @@ const dynamicFormFields = [
         ]
       },
       { name: "marketingConsent", label: "I would like to receive marketing communications", type: "checkbox", description: "We'll send you updates about future events, special offers, and related content." },
-      { name: "termsAccepted", label: "I agree to the terms and conditions and privacy policy", type: "checkbox", required: true, description: `By checking this box, you agree to our Terms of Service and Privacy Policy.` },
+      { name: "termsAccepted", label: "I agree to the terms and conditions and privacy policy", type: "checkbox", required: true, description: By checking this box, you agree to our Terms of Service and Privacy Policy. },
     ],
   },
 ];
@@ -159,10 +159,10 @@ const createStepSchema = (stepFields: StepField[]): z.ZodObject<StepSchema> => {
         fieldSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Please enter a valid date in YYYY-MM-DD format." });
       } else if (field.type === 'radio') {
         fieldSchema = z.enum((field.options?.map(opt => opt.id) || []) as [string, ...string[]], {
-          required_error: `Please select a ${field.label} option.`,
+          required_error: Please select a ${field.label} option.,
         });
       } else if (field.type === 'select') {
-        fieldSchema = z.string().min(1, { message: `Please select an option.` });
+        fieldSchema = z.string().min(1, { message: Please select an option. });
       } else if (field.type === 'checkbox' && field.name === 'termsAccepted') {
         fieldSchema = z.boolean().refine((val) => val === true, {
           message: "You must accept the terms and conditions.",
@@ -170,7 +170,7 @@ const createStepSchema = (stepFields: StepField[]): z.ZodObject<StepSchema> => {
       } else if (field.type === 'checkbox' && field.options) {
         fieldSchema = z.array(z.string()).optional();
       } else {
-        fieldSchema = z.string().min(2, { message: `${field.label} must be at least 2 characters.` });
+        fieldSchema = z.string().min(2, { message: ${field.label} must be at least 2 characters. });
       }
     } else if (field.type === 'checkbox' && field.options) {
       fieldSchema = z.array(z.string()).optional();
@@ -525,8 +525,13 @@ useEffect(() => {
       ipAddress: userIP || "Unknown", // Include the IP address
       referrer: document.referrer || "direct",
       userAgent: navigator.userAgent,
+<<<<<<< HEAD
+      screenResolution: ${window.screen.width}x${window.screen.height},
+      windowSize: ${window.innerWidth}x${window.innerHeight},
+=======
       screenResolution: `${window.screen.width}x${window.screen.height}`,
       windowSize: `${window.innerWidth}x${window.innerHeight}`,
+>>>>>>> 1ce3a86950688cbf2fab25eb2f2e908e98e8c142
       language: navigator.language,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
@@ -636,7 +641,7 @@ useEffect(() => {
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder={`Select an option`} />
+                      <SelectValue placeholder={Select an option} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -727,7 +732,7 @@ useEffect(() => {
               control={form.control}
               name={fieldConfig.name}
               render={({ field }: { field: any }) => (
-                <FormItem className={`flex flex-row items-start space-x-3 space-y-0 ${fieldConfig.colSpan}`}>
+                <FormItem className={flex flex-row items-start space-x-3 space-y-0 ${fieldConfig.colSpan}}>
                   <FormControl>
                     <Checkbox 
                       checked={field.value} 
