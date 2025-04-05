@@ -1,55 +1,77 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getEscalationsForUser } from '@/utils/suamn';
+import { supabase } from '@/utils/supabase';
 
-// Example notification data
-const SAMPLE_NOTIFICATIONS = [
-    {
-        id: 1,
-        title: 'Ticket Price Suggestion',
-        message: 'Consider decreasing ticket prices by 15% to boost attendance for your upcoming event.',
-        time: '2 hours ago',
-        type: 'suggestion',
-        read: false
-    },
-    {
-        id: 2,
-        title: 'New Registration',
-        message: 'You have 5 new registrations for "Tech Conference 2025".',
-        time: '6 hours ago',
-        type: 'info',
-        read: false
-    },
-    {
-        id: 3,
-        title: 'Venue Availability',
-        message: 'Your preferred venue has a cancellation on June 15th. Would you like to book it now?',
-        time: '1 day ago',
-        type: 'opportunity',
-        read: true
-    },
-    {
-        id: 4,
-        title: 'Marketing Suggestion',
-        message: 'Based on engagement data, sending reminder emails now could increase attendance by 25%.',
-        time: '2 days ago',
-        type: 'suggestion',
-        read: true
-    },
-    {
-        id: 5,
-        title: 'Weather Alert',
-        message: 'There\'s a 70% chance of rain on your outdoor event day. Consider preparing contingency plans.',
-        time: '3 days ago',
-        type: 'alert',
-        read: true
-    }
-];
 
 export default function NotificationComponent() {
     const [showNotifications, setShowNotifications] = useState(false);
-    const [notifications, setNotifications] = useState(SAMPLE_NOTIFICATIONS);
-
+    const [notifications, setNotifications] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    
+    const fetchEscalations = async () => {
+        setIsLoading(true);
+        setError(null);
+        
+        try {
+            // Get user ID from the session
+            const { data: sessionData } = await supabase.auth.getSession();
+            const userId = sessionData?.session?.user?.id;
+            
+            if (!userId) {
+                throw new Error('User not authenticated');
+            }
+            
+            // Fetch escalations
+            const escalationsData = await getEscalationsForUser(userId);
+            
+            if (escalationsData) {
+                // Transform escalations into notification format
+                const notificationsData = escalationsData.map((escalation, index) => ({
+                    id: escalation.id || index + 1,
+                    title: `Escalation: ${escalation.priority || 'New'} Priority`,
+                    message: escalation.issue_summary || 'A new issue has been escalated.',
+                    time: escalation.Created_at ? new Date(escalation.Created_at).toLocaleString() : 'Recently',
+                    type: mapPriorityToType(escalation.priority),
+                    read: false,
+                    originalData: escalation
+                }));
+                
+                setNotifications(notificationsData);
+            } else {
+                setNotifications([]);
+            }
+        } catch (err) {
+            console.error('Error fetching escalations:', err);
+            setError('Failed to load notifications');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    // Map priority levels to notification types
+    const mapPriorityToType = (priority) => {
+        switch (priority?.toLowerCase()) {
+            case 'high':
+                return 'alert';
+            case 'medium':
+                return 'opportunity';
+            case 'low':
+                return 'suggestion';
+            default:
+                return 'info';
+        }
+    };
+    
+    // Fetch escalations when the component mounts and when notifications are opened
+    useEffect(() => {
+        if (showNotifications) {
+            fetchEscalations();
+        }
+    }, [showNotifications]);
+    
     const unreadCount = notifications.filter(notification => !notification.read).length;
 
     const markAsRead = (id) => {
@@ -62,6 +84,45 @@ export default function NotificationComponent() {
         setNotifications(notifications.map(notification => ({ ...notification, read: true })));
     };
 
+    const deleteEscalation = async (notificationId, escalationId) => {
+        if (!escalationId) {
+            // Just remove from local state if no database ID
+            deleteNotification(notificationId);
+            return;
+        }
+        
+        setIsLoading(true);
+        try {
+            // Get user ID from the session
+            const { data: sessionData } = await supabase.auth.getSession();
+            const userId = sessionData?.session?.user?.id;
+            
+            if (!userId) {
+                throw new Error('User not authenticated');
+            }
+            
+            // Delete from the database
+            const { error } = await supabase
+                .from('escalations')
+                .delete()
+                .eq('id', escalationId);
+                
+            if (error) {
+                console.error('Error deleting escalation:', error);
+                Alert.alert('Error', 'Failed to delete the escalation. Please try again.');
+            } else {
+                // Remove from local state if successful
+                deleteNotification(notificationId);
+                Alert.alert('Success', 'Escalation deleted successfully.');
+            }
+        } catch (err) {
+            console.error('Error in deleteEscalation:', err);
+            Alert.alert('Error', 'An unexpected error occurred while deleting the escalation.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
     const deleteNotification = (id) => {
         setNotifications(notifications.filter(notification => notification.id !== id));
     };
@@ -73,26 +134,36 @@ export default function NotificationComponent() {
         switch (notification.type) {
             case 'suggestion':
                 Alert.alert(
-                    'Apply Suggestion?',
-                    `Would you like to implement this suggestion: ${notification.message}`,
+                    'Review Low Priority Issue?',
+                    `Would you like to review this issue: ${notification.message}`,
                     [
                         { text: 'Not Now', style: 'cancel' },
-                        { text: 'Apply', onPress: () => Alert.alert('Success', 'Suggestion applied successfully!') }
+                        { text: 'Review', onPress: () => Alert.alert('Success', 'Issue marked for review!') }
                     ]
                 );
                 break;
             case 'opportunity':
                 Alert.alert(
-                    'Take Action',
-                    `Would you like to act on this opportunity: ${notification.message}`,
+                    'Handle Medium Priority Issue',
+                    `Would you like to address this issue: ${notification.message}`,
                     [
                         { text: 'Dismiss', style: 'cancel' },
-                        { text: 'Take Action', onPress: () => Alert.alert('Success', 'Action initiated!') }
+                        { text: 'Handle Now', onPress: () => Alert.alert('Success', 'You are now handling this issue!') }
+                    ]
+                );
+                break;
+            case 'alert':
+                Alert.alert(
+                    'Urgent: High Priority Issue',
+                    `Immediate action recommended: ${notification.message}`,
+                    [
+                        { text: 'Dismiss', style: 'cancel' },
+                        { text: 'Address Immediately', onPress: () => Alert.alert('Success', 'Urgent issue is being addressed!') }
                     ]
                 );
                 break;
             default:
-                // Just mark as read for info and alerts
+                // Just mark as read for info
                 break;
         }
     };
@@ -142,7 +213,7 @@ export default function NotificationComponent() {
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Notifications</Text>
+                            <Text style={styles.modalTitle}>Escalation Notifications</Text>
                             <View style={styles.modalActions}>
                                 {unreadCount > 0 && (
                                     <TouchableOpacity
@@ -161,10 +232,26 @@ export default function NotificationComponent() {
                         </View>
 
                         <ScrollView style={styles.notificationsList}>
-                            {notifications.length === 0 ? (
+                            {isLoading ? (
+                                <View style={styles.loadingContainer}>
+                                    <ActivityIndicator size="large" color="#6366F1" />
+                                    <Text style={styles.loadingText}>Loading escalations...</Text>
+                                </View>
+                            ) : error ? (
+                                <View style={styles.errorContainer}>
+                                    <Ionicons name="alert-circle" size={48} color="#EF4444" />
+                                    <Text style={styles.errorText}>{error}</Text>
+                                    <TouchableOpacity 
+                                        style={styles.retryButton}
+                                        onPress={fetchEscalations}
+                                    >
+                                        <Text style={styles.retryButtonText}>Retry</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : notifications.length === 0 ? (
                                 <View style={styles.emptyState}>
                                     <Ionicons name="notifications-off" size={48} color="#DFE3FF" />
-                                    <Text style={styles.emptyStateText}>No notifications</Text>
+                                    <Text style={styles.emptyStateText}>No escalation notifications</Text>
                                 </View>
                             ) : (
                                 notifications.map(notification => (
@@ -186,8 +273,24 @@ export default function NotificationComponent() {
                                         <View style={styles.notificationContent}>
                                             <View style={styles.notificationHeader}>
                                                 <Text style={styles.notificationTitle}>{notification.title}</Text>
-                                                <TouchableOpacity
-                                                    onPress={() => deleteNotification(notification.id)}
+                                                <TouchableOpacity 
+                                                    onPress={() => {
+                                                        Alert.alert(
+                                                            'Delete Escalation',
+                                                            'Are you sure you want to delete this escalation?',
+                                                            [
+                                                                { text: 'Cancel', style: 'cancel' },
+                                                                { 
+                                                                    text: 'Delete', 
+                                                                    style: 'destructive',
+                                                                    onPress: () => deleteEscalation(
+                                                                        notification.id, 
+                                                                        notification.originalData?.id
+                                                                    )
+                                                                }
+                                                            ]
+                                                        );
+                                                    }}
                                                     style={styles.deleteButton}
                                                 >
                                                     <Ionicons name="trash-outline" size={16} color="#888" />
@@ -338,5 +441,35 @@ const styles = StyleSheet.create({
         marginTop: 16,
         fontSize: 16,
         color: '#888',
+    },
+    loadingContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+    },
+    loadingText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: '#888',
+    },
+    errorContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+    },
+    errorText: {
+        marginTop: 16,
+        fontSize: 16,
+        color: '#EF4444',
+    },
+    retryButton: {
+        marginTop: 16,
+        padding: 10,
+        backgroundColor: '#6366F1',
+        borderRadius: 5,
+    },
+    retryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
     },
 });

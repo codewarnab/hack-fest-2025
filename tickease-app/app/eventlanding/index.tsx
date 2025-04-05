@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,26 +16,7 @@ export default function MyEvents() {
         loadEvents();
     }, []);
 
-    // Function to validate if an event has all required fields
-    const isValidEvent = (event) => {
-        const requiredFields = [
-            'title',
-            'description',
-            'venue',
-            'image',
-            'category',
-            'eventDate', // Using eventDate instead of date
-            'eventTime', // Using eventTime instead of time
-            'form_schema'
-        ];
-
-        return requiredFields.every(field =>
-            event[field] !== undefined &&
-            event[field] !== null &&
-            event[field] !== ''
-        );
-    };
-
+   
     // Updated function to load events using the utility function
     async function loadEvents() {
         try {
@@ -62,7 +42,7 @@ export default function MyEvents() {
     const EventItem = ({ event }) => (
         <TouchableOpacity
             style={styles.eventCard}
-            onPress={() => router.push(`/account`)}
+            onPress={() => router.push('/account')}
         >
             <View style={styles.eventCardHeader}>
                 {event.eventDate ? (

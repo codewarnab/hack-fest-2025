@@ -20,7 +20,6 @@ import {
 import { Platform, useColorScheme } from "react-native";
 import { SessionProvider } from "@/context/SessionProvider";
 import { Ionicons } from "@expo/vector-icons";
-import { PushNotificationProvider } from "@/components/notifications/PushNotificationProvider";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -54,7 +53,6 @@ export default function RootLayout() {
 
   return (
     <SessionProvider>
-      <PushNotificationProvider>
         <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
           <ThemedView style={{ flex: 1 }}>
             <Stack screenOptions={{ headerShown: false }}>
@@ -71,7 +69,6 @@ export default function RootLayout() {
           </ThemedView>
           <StatusBar style="auto" />
         </ThemeProvider>
-      </PushNotificationProvider>
     </SessionProvider>
   );
 }
