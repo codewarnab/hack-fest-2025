@@ -16,6 +16,8 @@ import { getUserDeviceInfo, getLocationFromIP } from "@/lib/utils"
 import { saveRegistrationProgress, getRegistrationProgress } from "@/lib/cookies"
 import { useAnalytics } from "@/components/analytics-provider"
 import { Loader2 } from "lucide-react"
+import { createClient } from "../../utils/supabase/client"
+import { toast } from "sonner"
 
 // Define dynamic form fields data
 const dynamicFormFields = [
@@ -191,6 +193,8 @@ export default function RegistrationForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [formStartTime, setFormStartTime] = useState(Date.now());
+  const [eventId, setEventId] = useState<string | null>(null); // For storing event ID
+  
   interface Location {
     city: string;
     country: string;
@@ -213,6 +217,20 @@ useEffect(() => {
       console.error("Failed to fetch IP address:", error);
     }
   };
+
+  // Get the event ID from URL or localStorage (assuming event ID is in the URL)
+  const params = new URLSearchParams(window.location.search);
+  const eventIdFromUrl = params.get('eventId');
+  if (eventIdFromUrl) {
+    setEventId(eventIdFromUrl);
+    localStorage.setItem('currentEventId', eventIdFromUrl);
+  } else {
+    // Try to get from localStorage if not in URL
+    const storedEventId = localStorage.getItem('currentEventId');
+    if (storedEventId) {
+      setEventId(storedEventId);
+    }
+  }
 
   fetchIP();
 }, []);
@@ -366,6 +384,81 @@ useEffect(() => {
     }
   };
 
+  // Function to save registration data to Supabase
+  async function saveRegistrationToDatabase(registrationData: CompleteRegistrationData) {
+    try {
+      const supabase = createClient();
+      
+      // First check if user already exists and create if not
+      let userId = null;
+      
+      const { data: existingUser, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', registrationData.email)
+        .maybeSingle();
+      
+      if (userError) {
+        console.error("Error checking for existing user:", userError);
+        throw new Error("Failed to check for existing user");
+      }
+      
+      if (existingUser) {
+        userId = existingUser.id;
+      } else {
+        // Create new user
+        const { data: newUser, error: createUserError } = await supabase
+          .from('users')
+          .insert({
+            name: registrationData.fullName,
+            email: registrationData.email,
+            contact_phone: registrationData.phone,
+            discovery: registrationData.hearAbout,
+            organizion_name: registrationData.companyName || null
+          })
+          .select('id')
+          .single();
+        
+        if (createUserError) {
+          console.error("Error creating user:", createUserError);
+          throw new Error("Failed to create user account");
+        }
+        
+        userId = newUser.id;
+      }
+      
+      // Now save the registration data
+      const { error: registrationError } = await supabase
+        .from('registrations')
+        .insert({
+          event_id: eventId,
+          user_id: userId,
+          form_data: registrationData,
+          registration_date: registrationData.registrationDate,
+          time_spent_on_form: registrationData.timeSpentOnForm,
+          ip_address: registrationData.ipAddress,
+          referrer: registrationData.referrer,
+          user_agent: registrationData.userAgent,
+          screen_resolution: registrationData.screenResolution,
+          window_size: registrationData.windowSize,
+          language: registrationData.language,
+          timezone: registrationData.timezone,
+          device: registrationData.device,
+          location: registrationData.location
+        });
+      
+      if (registrationError) {
+        console.error("Error saving registration:", registrationError);
+        throw new Error("Failed to save registration data");
+      }
+      
+      return { success: true, userId };
+    } catch (error) {
+      console.error("Registration save error:", error);
+      throw error;
+    }
+  }
+
   interface CompleteRegistrationData {
     registrationDate: string;
     timeSpentOnForm: number;
@@ -394,77 +487,83 @@ useEffect(() => {
     hasDietaryRestrictions?: boolean;
   }
 
-  function onSubmit(values: Record<string, any>): void {
-      // Pre-check for terms and conditions before submission
-      if (!values.termsAccepted) {
-        form.setError("termsAccepted", { 
-          type: "manual", 
-          message: "You must accept the terms and conditions." 
-        });
-        return;
-      }
-      
-      setIsSubmitting(true);
-      
-      // Accumulate form data
-      const finalFormData: Record<string, any> = { ...formData, ...values };
-      
-      // Track step submission
-      trackEvent("form_step_complete", {
-        formName: "registration",
-        step: currentStep,
-        timestamp: new Date().toISOString(),
+  async function onSubmit(values: Record<string, any>): Promise<void> {
+    // Pre-check for terms and conditions before submission
+    if (!values.termsAccepted) {
+      form.setError("termsAccepted", { 
+        type: "manual", 
+        message: "You must accept the terms and conditions." 
       });
-      
-      // Calculate time spent on form
-      const timeSpent: number = Math.floor((Date.now() - formStartTime) / 1000); // in seconds
-      
-      // Collect device and browser information
-      const deviceData: Record<string, any> = deviceInfo || getUserDeviceInfo();
-      
-      // Prepare complete registration data
-      const completeRegistrationData: CompleteRegistrationData = {
-        ...finalFormData,
-        registrationDate: new Date().toISOString(),
-        timeSpentOnForm: timeSpent,
-        device: deviceData,
-        location: locationInfo || { country: "Unknown", city: "Unknown", region: "Unknown", timezone: "Unknown" },
-        ipAddress: userIP || "Unknown", // Include the IP address
-        referrer: document.referrer || "direct",
-        userAgent: navigator.userAgent,
-        screenResolution: `${window.screen.width}x${window.screen.height}`,
-        windowSize: `${window.innerWidth}x${window.innerHeight}`,
-        language: navigator.language,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      };
-      
-      // Track final form submission
-      const analyticsFormData: AnalyticsFormData = {
-        interests: completeRegistrationData.interests,
-        hearAbout: completeRegistrationData.hearAbout,
-        marketingConsent: completeRegistrationData.marketingConsent,
-        hasAccessibilityNeeds: completeRegistrationData.accessibilityNeeds && completeRegistrationData.accessibilityNeeds.length > 0,
-        hasDietaryRestrictions: completeRegistrationData.dietaryRestrictions && completeRegistrationData.dietaryRestrictions.length > 0,
-      };
-    
-      trackEvent("form_submit", {
-        formName: "registration",
-        timeSpent,
-        formData: analyticsFormData,
-      });
-      
-      console.log("Complete Registration Data:", completeRegistrationData);
-      
-      // Store form data in session storage
-      sessionStorage.setItem("registrationData", JSON.stringify(completeRegistrationData));
-      
-      // Simulate form submission with a delay
-      setTimeout((): void => {
-        router.push("/ticket-selection");
-        setIsSubmitting(false);
-      }, 1500);
+      return;
     }
     
+    setIsSubmitting(true);
+    
+    // Accumulate form data
+    const finalFormData: Record<string, any> = { ...formData, ...values };
+    
+    // Track step submission
+    trackEvent("form_step_complete", {
+      formName: "registration",
+      step: currentStep,
+      timestamp: new Date().toISOString(),
+    });
+    
+    // Calculate time spent on form
+    const timeSpent: number = Math.floor((Date.now() - formStartTime) / 1000); // in seconds
+    
+    // Collect device and browser information
+    const deviceData: Record<string, any> = deviceInfo || getUserDeviceInfo();
+    
+    // Prepare complete registration data
+    const completeRegistrationData: CompleteRegistrationData = {
+      ...finalFormData,
+      registrationDate: new Date().toISOString(),
+      timeSpentOnForm: timeSpent,
+      device: deviceData,
+      location: locationInfo || { country: "Unknown", city: "Unknown", region: "Unknown", timezone: "Unknown" },
+      ipAddress: userIP || "Unknown", // Include the IP address
+      referrer: document.referrer || "direct",
+      userAgent: navigator.userAgent,
+      screenResolution: `${window.screen.width}x${window.screen.height}`,
+      windowSize: `${window.innerWidth}x${window.innerHeight}`,
+      language: navigator.language,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+    
+    // Track final form submission
+    const analyticsFormData: AnalyticsFormData = {
+      interests: completeRegistrationData.interests,
+      hearAbout: completeRegistrationData.hearAbout,
+      marketingConsent: completeRegistrationData.marketingConsent,
+      hasAccessibilityNeeds: completeRegistrationData.accessibilityNeeds && completeRegistrationData.accessibilityNeeds.length > 0,
+      hasDietaryRestrictions: completeRegistrationData.dietaryRestrictions && completeRegistrationData.dietaryRestrictions.length > 0,
+    };
+  
+    trackEvent("form_submit", {
+      formName: "registration",
+      timeSpent,
+      formData: analyticsFormData,
+    });
+    
+    console.log("Complete Registration Data:", completeRegistrationData);
+    
+    try {
+      await saveRegistrationToDatabase(completeRegistrationData);
+      toast.success("Registration saved successfully!");
+    } catch (error) {
+      toast.error("Failed to save registration. Please try again.");
+    }
+    
+    // Store form data in session storage
+    sessionStorage.setItem("registrationData", JSON.stringify(completeRegistrationData));
+    
+    // Simulate form submission with a delay
+    setTimeout((): void => {
+      router.push("/ticket-selection");
+      setIsSubmitting(false);
+    }, 1500);
+  }
 
   interface FieldConfig {
     name: string;

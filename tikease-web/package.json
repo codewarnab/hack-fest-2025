@@ -37,6 +37,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "shortid": "^2.2.17",
+    "sonner": "^2.0.3",
     "tailwind-merge": "^3.1.0",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.5",
