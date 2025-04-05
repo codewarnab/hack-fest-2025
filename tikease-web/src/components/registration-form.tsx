@@ -28,7 +28,7 @@ const dynamicFormFields = [
     fields: [
       { name: "fullName", label: "Full Name", type: "text", placeholder: "John Doe", required: true },
       { name: "email", label: "Email Address", type: "email", placeholder: "john.doe@example.com", required: true },
-      { name: "phone", label: "Phone Number", type: "text", placeholder: "+1 (555) 123-4567", description: "For SMS alerts and customer support" },
+      { name: "phone", label: "Phone Number", type: "text", placeholder: "+91673294272", description: "For SMS alerts and customer support" },
     ],
   },
   {
