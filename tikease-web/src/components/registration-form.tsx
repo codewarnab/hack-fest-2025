@@ -525,8 +525,13 @@ useEffect(() => {
       ipAddress: userIP || "Unknown", // Include the IP address
       referrer: document.referrer || "direct",
       userAgent: navigator.userAgent,
+<<<<<<< HEAD
       screenResolution: ${window.screen.width}x${window.screen.height},
       windowSize: ${window.innerWidth}x${window.innerHeight},
+=======
+      screenResolution: `${window.screen.width}x${window.screen.height}`,
+      windowSize: `${window.innerWidth}x${window.innerHeight}`,
+>>>>>>> 1ce3a86950688cbf2fab25eb2f2e908e98e8c142
       language: navigator.language,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
