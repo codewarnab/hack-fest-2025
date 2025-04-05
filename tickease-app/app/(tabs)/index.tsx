@@ -1,10 +1,18 @@
-import MyEvents from "../eventlanding";
-import React from 'react'
+import React from 'react';
+import { StyleSheet } from 'react-native';
+import { ThemedView } from "@/components/ThemedView";
+import MyEvents from '../eventlanding/index'; // Import the MyEvents component
 
-const index = () => {
+export default function HomeScreen() {
   return (
-    <MyEvents />
-  )
+    <ThemedView style={styles.container}>
+      <MyEvents />
+    </ThemedView>
+  );
 }
 
-export default index
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});

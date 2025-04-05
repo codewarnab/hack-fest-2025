@@ -30,7 +30,8 @@ export default function Auth() {
         })
 
         if (data) {
-            router.push("/eventlanding")
+            // Redirect to the tabs layout instead of eventlanding
+            router.replace("/(tabs)")
         }
 
         if (error) Alert.alert('Sign In Error', error.message)
@@ -192,4 +193,4 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
     },
-});
+})

@@ -5,6 +5,11 @@ import React from "react";
 import { Image } from "expo-image";
 import { View } from "react-native";
 import { generalStyles } from "@/styles";
+import { router } from "expo-router";
+
+const navigateToTabs = () => {
+  router.replace('/(tabs)');
+};
 
 export default function OnboardingStepOne() {
   const primary1 = useThemeColor({}, "primary1");
