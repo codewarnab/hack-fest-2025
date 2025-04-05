@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,23 +7,70 @@ import {
     TouchableOpacity,
     Alert,
     Platform,
-    ScrollView // Use ScrollView for potential smaller screens
+    ScrollView,
+    ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import QRCodeSVG from 'react-native-qrcode-svg'; // Import QR Code generator
-import * as Clipboard from 'expo-clipboard'; // Import Clipboard
-import * as MediaLibrary from 'expo-media-library'; // Import Media Library
-import { captureRef } from 'react-native-view-shot'; // Import View Shot
-import * as Sharing from 'expo-sharing'; // Import Sharing
+import QRCodeSVG from 'react-native-qrcode-svg';
+import * as Clipboard from 'expo-clipboard';
+import * as MediaLibrary from 'expo-media-library';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 
 // --- Component ---
 const QRCodeDisplay = () => {
+    const [eventId, setEventId] = useState<string | null>(null);
     // --- Configuration (Hardcoded for now) ---
-    const eventId = 'EVENT123XYZ'; // Replace with dynamic ID later
-    const baseUrl = 'http://localhost:8081'; // Use your actual local dev URL or deployment URL
-    const eventUrl = `${baseUrl}/event/${eventId}`;
+    // Replace with dynamic ID later
+    const baseUrl = 'http://localhost:3000'; // Use your actual local dev URL or deployment URL
 
+    // Function to redirect to event landing page
+    const navigateToHome = () => {
+        router.push('/eventlanding');
+    };
+
+    // Function to retrieve event ID from AsyncStorage
+    useEffect(() => {
+        const fetchEventId = async () => {
+            try {
+                setLoading(true);
+                const itemStr = await AsyncStorage.getItem('event_id');
+                if (itemStr) {
+                    const item = JSON.parse(itemStr);
+                    const now = Date.now();
+
+                    if (now > item.expiry) {
+                        // Item has expired
+                        await AsyncStorage.removeItem('event_id');
+                        Alert.alert(
+                            'Session Expired',
+                            'Your event creation session has expired. Please start over.',
+                            [{ text: 'OK', onPress: () => router.replace('/eventlanding') }]
+                        );
+                    } else {
+                        setEventId(item.value);
+                    }
+                } else {
+                    Alert.alert(
+                        'No Event Found',
+                        'Could not find the event you were creating. Please try again.',
+                        [{ text: 'OK', onPress: () => router.replace('/eventlanding') }]
+                    );
+                }
+            } catch (error) {
+                console.error('Error retrieving event ID:', error);
+                Alert.alert('Error', 'Failed to load event data. Please try again.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchEventId();
+    }, []);
     // --- State & Refs ---
+    const [loading, setLoading] = useState(false);
     const qrCodeRef = useRef(null); // Ref for the QR code ViewShot wrapper
     const [mediaLibraryPermission, requestPermission] = MediaLibrary.usePermissions(); // Hook for permissions
 
@@ -31,7 +78,7 @@ const QRCodeDisplay = () => {
 
     // Copy URL to Clipboard
     const copyToClipboard = async () => {
-        await Clipboard.setStringAsync(eventUrl);
+        await Clipboard.setStringAsync(`${baseUrl}/event/${eventId}`);
         Alert.alert("Copied!", "Event URL copied to clipboard.");
     };
 
@@ -94,14 +141,14 @@ const QRCodeDisplay = () => {
             });
 
             await Sharing.shareAsync(localUri, {
-                 mimeType: 'image/png',
-                 dialogTitle: 'Share Event QR Code',
-                 UTI: 'public.png',
+                mimeType: 'image/png',
+                dialogTitle: 'Share Event QR Code',
+                UTI: 'public.png',
             });
 
         } catch (error: any) {
-             // Check if the error is simply the user cancelling the share dialog
-             if (error.message.includes('cancelled')) {
+            // Check if the error is simply the user cancelling the share dialog
+            if (error.message.includes('cancelled')) {
                 console.log('Sharing cancelled by user.');
             } else {
                 console.error("Error sharing QR code:", error);
@@ -118,6 +165,17 @@ const QRCodeDisplay = () => {
             contentContainerStyle={styles.scrollContentContainer}
             showsVerticalScrollIndicator={false}
         >
+            {/* Header with Home button */}
+            <View style={styles.header}>
+                <TouchableOpacity
+                    style={styles.homeButton}
+                    onPress={navigateToHome}
+                >
+                    <Ionicons name="home-outline" size={24} color="#6366F1" />
+                    <Text style={styles.homeButtonText}>Home</Text>
+                </TouchableOpacity>
+            </View>
+
             <Text style={styles.pageHeader}>Event Link & QR Code</Text>
 
             {/* QR Code Section */}
@@ -126,16 +184,16 @@ const QRCodeDisplay = () => {
                 {/* View to capture - give it a background for saving */}
                 <View ref={qrCodeRef} style={styles.qrCodeWrapper} collapsable={false}>
                     <QRCodeSVG
-                        value={eventUrl}
+                        value={`${baseUrl}/event/${eventId}`}
                         size={250} // Adjust size as needed
                         color="#212529" // QR code color
                         backgroundColor="white" // Background for the QR itself (usually white)
-                        // logo={require('./path/to/your/logo.png')} // Optional: Add a logo
-                        // logoSize={30}
-                        // logoBackgroundColor='transparent'
+                    // logo={require('./path/to/your/logo.png')} // Optional: Add a logo
+                    // logoSize={30}
+                    // logoBackgroundColor='transparent'
                     />
                 </View>
-                 <Text style={styles.qrInstruction}>Scan this code with a camera app or QR reader to access the event link.</Text>
+                <Text style={styles.qrInstruction}>Scan this code with a camera app or QR reader to access the event link.</Text>
             </View>
 
             {/* URL Section */}
@@ -144,7 +202,7 @@ const QRCodeDisplay = () => {
                 <View style={styles.inputRow}>
                     <TextInput
                         style={styles.textInput}
-                        value={eventUrl}
+                        value={`${baseUrl}/event/${eventId}`}
                         editable={false} // Don't allow editing
                         selectTextOnFocus={true} // Make it easy to select all
                         placeholderTextColor="#ADB5BD"
@@ -162,7 +220,7 @@ const QRCodeDisplay = () => {
                     <Text style={styles.actionButtonText}>Save QR Code</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionButton, styles.shareButton]} onPress={shareQrCode}>
-                     <Ionicons name="share-social-outline" size={20} color="#ffffff" />
+                    <Ionicons name="share-social-outline" size={20} color="#ffffff" />
                     <Text style={styles.actionButtonText}>Share QR Code</Text>
                 </TouchableOpacity>
             </View>
@@ -181,6 +239,25 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 40, // Extra space at bottom
         alignItems: 'center', // Center content horizontally
+    },
+    header: {
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        marginBottom: 20,
+    },
+    homeButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 10,
+        backgroundColor: '#E5E7EB',
+        borderRadius: 8,
+    },
+    homeButtonText: {
+        marginLeft: 5,
+        color: '#6366F1',
+        fontSize: 16,
+        fontWeight: '600',
     },
     pageHeader: {
         fontSize: 22,
@@ -255,9 +332,9 @@ const styles = StyleSheet.create({
         bottom: 0,
         justifyContent: 'center',
         paddingHorizontal: 10,
-         // backgroundColor: '#F8F9FA', // Optional subtle background
-         // borderTopRightRadius: 8, // Match input border radius
-         // borderBottomRightRadius: 8,
+        // backgroundColor: '#F8F9FA', // Optional subtle background
+        // borderTopRightRadius: 8, // Match input border radius
+        // borderBottomRightRadius: 8,
     },
     actionsContainer: {
         flexDirection: 'row',

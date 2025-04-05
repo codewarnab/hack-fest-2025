@@ -129,7 +129,7 @@ const initializeEvent = async (
 
     // Step 5: Store in AsyncStorage
     try {
-        await storeWithExpiry(`event_id`, insertedEvent.id, 1000 * 60 * 10); // expires in 10 min
+        await storeWithExpiry(`event_id`, insertedEvent.id, 1000 * 60 * 100); // expires in 100 min
         console.log('Event stored in AsyncStorage');
     } catch (storageError) {
         console.error('Error saving to AsyncStorage:', storageError);
@@ -163,7 +163,7 @@ const updateEvent = async (eventId: string, questionData: Question[]) => {
     // Update only the form_Schema field
     const { data, error } = await supabase
         .from('events')
-        .update({ form_Schema: questionData })
+        .update({ custon_forms: questionData })
         .eq('id', eventId)
         .select();
 
