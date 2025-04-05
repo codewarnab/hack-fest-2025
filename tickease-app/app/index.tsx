@@ -1,5 +1,6 @@
-import { Redirect } from "expo-router";
+import { Redirect } from 'expo-router';
 
 export default function Index() {
-    return <Redirect href="/onboarding/step-1" />;
+  // Redirect to the eventlanding page first
+  return <Redirect href="/onboarding/step-1" />;
 }

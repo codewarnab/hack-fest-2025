@@ -4,7 +4,12 @@ import { generalStyles } from "@/styles";
 import React, { useRef, useEffect } from "react";
 import { View, Text, Animated, StyleSheet } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 
+
+export const navigateToTabs = () => {
+  router.replace('/(tabs)');
+};
 export default function OnboardingStepTwo() {
   const primary1 = useThemeColor({}, "primary1");
   const primary2 = useThemeColor({}, "primary2");
