@@ -64,6 +64,7 @@ export default function RootLayout() {
             <Stack.Screen name="landing_form2" />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="reg_form/index" />
+            <Stack.Screen name="noti" />
             <Stack.Screen name="qr" />
           </Stack>
         </ThemedView>

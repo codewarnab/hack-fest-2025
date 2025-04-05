@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { supabase } from '@/utils/supabase';
+import { supabase } from '../../utils/supabase'
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import NotificationComponent from '../notif/index';
+import NotificationComponent from '../notif';
 
 export default function MyEvents() {
     const insets = useSafeAreaInsets();

@@ -57,7 +57,7 @@ async function getEvent(id: string) {
 }
 
 export default async function EventPage({ params }: { params: { id: string } }) {
-  const id = params.id;
+  const { id } = await params; // Await params to resolve the issue
   const event = await getEvent(id);
 
   if (!event) {
