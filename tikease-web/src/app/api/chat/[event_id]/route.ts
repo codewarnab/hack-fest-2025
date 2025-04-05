@@ -1,11 +1,12 @@
 import { google } from "@ai-sdk/google";
 import { streamText, tool } from "ai";
 import { z } from "zod";
-
+import { createClient } from "../../../../../utils/supabase/server";
 export const maxDuration = 30;
+import { cookies } from "next/headers";
 
 // --- Tool Definitions (Keep them as they were) ---
-
+// Removed global cookieStore and supabase initialization
 // 1. Escalate Issue Tool (Enhanced)
 const escalateToManager = tool({
   description: `Use this tool ONLY to escalate a user's significant issue, complaint, or complex request that cannot be resolved with provided info. 
@@ -37,7 +38,30 @@ const escalateToManager = tool({
     console.log(`User Name: ${userName}`);
     console.log(`User Contact: ${userContact}`);
     console.log(`Issue Summary: ${issueSummary}`);
-    console.log("Simulating notification to the event manager with details...");
+
+
+    const supabase = createClient(cookies()); // Pass the cookieStore as an argument
+    const { data, error } = await supabase
+      .from("escalations")
+      .insert([
+        {
+          user_name: userName,
+          user_contact: userContact,
+          issue_summary: issueSummary,
+          priority: priority,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+    if (error) {
+      console.error("Error storing escalation in database:", error);
+      return {
+        status: "failed",
+        message: `Failed to escalate issue for **${userName}**. Please try again later.`,
+      };
+    }
+
+    console.log("Escalation stored in database:", data);
     console.log("------------------------------------");
     return {
       status: "success",
@@ -168,8 +192,9 @@ FREQUENTLY ASKED QUESTIONS:
 
 // --- API Route Handler ---
 export async function POST(req: Request) {
+  const cookieStore = cookies();
+  const supabase = createClient(cookieStore);
   const { messages } = await req.json();
-
   const result = streamText({
     model: google("gemini-1.5-pro-latest"),
     tools: {
@@ -258,3 +283,4 @@ ${event_details}
 
   return result.toDataStreamResponse();
 }
+

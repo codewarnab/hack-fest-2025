@@ -1,6 +1,6 @@
-import { OnBoardingLayout } from "@/components/ui/OnBoardingLayout";
-import { useThemeColor } from "@/hooks/useThemeColor";
-import { generalStyles } from "@/styles";
+import { OnBoardingLayout } from "../../components/ui/OnBoardingLayout";
+import { useThemeColor } from "../../hooks/useThemeColor";
+import { generalStyles } from "../../styles";
 import React, { useRef, useEffect } from "react";
 import { View, Text, Animated, StyleSheet } from "react-native";
 import { Feather } from "@expo/vector-icons";

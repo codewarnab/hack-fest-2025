@@ -218,18 +218,15 @@ useEffect(() => {
     }
   };
 
-  // Get the event ID from URL or localStorage (assuming event ID is in the URL)
-  const params = new URLSearchParams(window.location.search);
-  const eventIdFromUrl = params.get('eventId');
-  if (eventIdFromUrl) {
-    setEventId(eventIdFromUrl);
-    localStorage.setItem('currentEventId', eventIdFromUrl);
-  } else {
-    // Try to get from localStorage if not in URL
-    const storedEventId = localStorage.getItem('currentEventId');
-    if (storedEventId) {
+  // Safely access localStorage with error handling
+  try {
+    if (typeof window !== 'undefined') {
+      const storedEventId = localStorage.getItem("EventId");
       setEventId(storedEventId);
     }
+  } catch (error) {
+    console.error("Failed to access localStorage:", error);
+    setEventId(null);
   }
 
   fetchIP();
@@ -428,7 +425,7 @@ useEffect(() => {
       }
       localStorage.setItem("userId", userId);
       console.log("UserId ID saved to localStorage:", userId);
-      
+
       // Now save the registration data
       const { error: registrationError } = await supabase
         .from('registrations')

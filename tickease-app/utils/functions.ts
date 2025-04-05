@@ -129,7 +129,7 @@ const initializeEvent = async (
 
     // Step 5: Store in AsyncStorage
     try {
-        await storeWithExpiry(`event_${insertedEvent.id}`, insertedEvent, 1000 * 60 * 60 * 24); // expires in 24 hrs
+        await storeWithExpiry(`event_id`, insertedEvent.id, 1000 * 60 * 10); // expires in 10 min
         console.log('Event stored in AsyncStorage');
     } catch (storageError) {
         console.error('Error saving to AsyncStorage:', storageError);

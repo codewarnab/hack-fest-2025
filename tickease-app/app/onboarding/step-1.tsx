@@ -1,10 +1,10 @@
 import { ThemedText } from "@/components/ThemedText";
 import { OnBoardingLayout } from "@/components/ui/OnBoardingLayout";
-import { useThemeColor } from "@/hooks/useThemeColor";
+import { useThemeColor } from "../../hooks/useThemeColor";
 import React from "react";
 import { Image } from "expo-image";
 import { View } from "react-native";
-import { generalStyles } from "@/styles";
+import { generalStyles } from "../../styles";
 import { router } from "expo-router";
 
 const navigateToTabs = () => {
