@@ -217,7 +217,7 @@ export default function CreateEvent() {
       }
     } catch (error) {
       console.error('Navigation error on cancel:', error);
-      Alert.alert('Navigation Error', 'Could not go back');
+      
     }
   };
 

@@ -95,7 +95,14 @@ const TicketTypeForm = () => {
   // Remove a ticket type
   const removeTicketType = (id: string) => {
     if (ticketTypes.length <= 1) {
-      Alert.alert("Cannot Remove", "You must have at least one ticket type.");
+      Alert.alert(
+        "Cannot Remove", 
+        "You must have at least one ticket type.", 
+        [
+          { text: "OK", style: "cancel" }
+        ],
+        { cancelable: true }
+      );
       return;
     }
     
@@ -173,73 +180,6 @@ const TicketTypeForm = () => {
     );
   };
 
-  // Add a new promo code
-  const addNewPromoCode = (ticketId: string) => {
-    const newPromo: PromoCode = {
-      id: `promo_${Date.now()}`,
-      code: '',
-      discountType: 'percentage', // Default type
-      discountValue: 0
-    };
-    setTicketTypes(
-      ticketTypes.map(ticket =>
-        ticket.id === ticketId
-          ? { ...ticket, promoCodes: [...ticket.promoCodes, newPromo] }
-          : ticket
-      )
-    );
-  };
-
-  // Remove a promo code
-  const removePromoCode = (ticketId: string, promoCodeId: string) => {
-    // Remove associated refs
-    const updatedRefs = {...inputRefs.current};
-    Object.keys(updatedRefs).forEach(key => {
-      if (key.includes(promoCodeId)) {
-        delete updatedRefs[key];
-      }
-    });
-    inputRefs.current = updatedRefs;
-    
-    setTicketTypes(
-      ticketTypes.map(ticket =>
-        ticket.id === ticketId
-          ? { ...ticket, promoCodes: ticket.promoCodes.filter(promo => promo.id !== promoCodeId) }
-          : ticket
-      )
-    );
-  };
-
-  // Update a promo code field
-  const updatePromoCode = (ticketId: string, promoCodeId: string, field: keyof Omit<PromoCode, 'id'>, value: string | number) => {
-     // Format/Validate Code Input
-     if (field === 'code') {
-         value = String(value).toUpperCase().replace(/[^A-Z0-9]/g, ''); // Allow only uppercase letters/numbers
-     }
-     // Validate Discount Value
-     if (field === 'discountValue') {
-        value = Math.max(0, Number(value) || 0); // Ensure non-negative number
-        // Find the current type to clamp percentage
-        const currentTicket = ticketTypes.find(t => t.id === ticketId);
-        const currentPromo = currentTicket?.promoCodes.find(p => p.id === promoCodeId);
-        if (currentPromo?.discountType === 'percentage') {
-            value = Math.min(100, Number(value)); // Clamp percentage to 100
-        }
-     }
-
-    setTicketTypes(
-      ticketTypes.map(ticket =>
-        ticket.id === ticketId
-          ? {
-              ...ticket,
-              promoCodes: ticket.promoCodes.map(promo =>
-                promo.id === promoCodeId ? { ...promo, [field]: value } : promo
-              )
-            }
-          : ticket
-      )
-    );
-  };
 
    // Log data on "Next" press
    const goToNextStep = () => {
@@ -254,7 +194,7 @@ const TicketTypeForm = () => {
        console.log(JSON.stringify(ticketTypes, null, 2));
        console.log("-------------------------------------------------------");
        Keyboard.dismiss();
-       Alert.alert("Data Logged", "Ticket configuration has been logged to the console.");
+     
       router.push('/qr');
    };
 
@@ -360,70 +300,7 @@ const TicketTypeForm = () => {
     </View>
   ), [StableTextInput]);
 
-  // Promo Code Form Component
-  const PromoCodeForm = useCallback(({ 
-    ticketId, 
-    promoCodes 
-  }: { 
-    ticketId: string, 
-    promoCodes: PromoCode[] 
-  }) => (
-    <View style={styles.promoCodesContainer}>
-      <Text style={styles.promoCodesTitle}>Promo Codes</Text>
-      {promoCodes.length === 0 && <Text style={styles.noItemsText}>No promo codes defined.</Text>}
-      {promoCodes.map((promo) => (
-        <View key={promo.id} style={styles.promoCodeFormSection}>
-          <View style={styles.formHeader}>
-            <Text style={styles.formSubtitle}>Promo Code</Text>
-            <TouchableOpacity style={styles.removeButton} onPress={() => removePromoCode(ticketId, promo.id)}>
-              <Ionicons name="close-circle-outline" size={22} color="#FF6B6B" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Code *</Text>
-            <StableTextInput 
-              id={`${ticketId}_${promo.id}_code`}
-              style={[styles.textInput, styles.promoCodeInput]} 
-              value={promo.code} 
-              onChangeText={(text) => updatePromoCode(ticketId, promo.id, 'code', text)} 
-              placeholder="e.g. EARLYBIRD10" 
-              placeholderTextColor="#ADB5BD" 
-              autoCapitalize="characters"
-            />
-          </View>
-          <View style={styles.rowContainer}>
-            <View style={styles.halfInputContainer}>
-              <Text style={styles.inputLabel}>Discount Type *</Text>
-              <View style={styles.discountTypeSelector}>
-                <TouchableOpacity style={[styles.discountTypeButton, promo.discountType === 'percentage' && styles.discountTypeButtonActive]} onPress={() => updatePromoCode(ticketId, promo.id, 'discountType', 'percentage')}>
-                  <Text style={[styles.discountTypeButtonText, promo.discountType === 'percentage' && styles.discountTypeButtonTextActive]}>% Percentage</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.discountTypeButton, promo.discountType === 'fixed' && styles.discountTypeButtonActive]} onPress={() => updatePromoCode(ticketId, promo.id, 'discountType', 'fixed')}>
-                  <Text style={[styles.discountTypeButtonText, promo.discountType === 'fixed' && styles.discountTypeButtonTextActive]}>$ Fixed</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.halfInputContainer}>
-              <Text style={styles.inputLabel}>Discount Value *</Text>
-              <StableTextInput 
-                id={`${ticketId}_${promo.id}_value`}
-                style={styles.textInput} 
-                value={promo.discountValue === 0 ? '' : promo.discountValue.toString()} 
-                onChangeText={(text) => updatePromoCode(ticketId, promo.id, 'discountValue', text)} 
-                keyboardType="numeric" 
-                placeholder={promo.discountType === 'percentage' ? "e.g. 10" : "e.g. 5"} 
-                placeholderTextColor="#ADB5BD"
-              />
-            </View>
-          </View>
-        </View>
-      ))}
-      <TouchableOpacity style={styles.addButton} onPress={() => addNewPromoCode(ticketId)}>
-        <Ionicons name="add-circle-outline" size={22} color="#6A5ACD" />
-        <Text style={styles.addButtonText}>Add Promo Code</Text>
-      </TouchableOpacity>
-    </View>
-  ), [StableTextInput]);
+
 
   // --- Main Ticket Form Renderer ---
   const renderTicketForm = useCallback(({ item }: { item: TicketType }) => (
@@ -496,7 +373,7 @@ const TicketTypeForm = () => {
       {/* Promo Codes */}
     
     </View>
-  ), [ticketTypes, activeInputId, StableTextInput, AddOnForm, PromoCodeForm]);
+  ), [ticketTypes, activeInputId, StableTextInput, AddOnForm]);
 
   // --- Main Return ---
   return (
