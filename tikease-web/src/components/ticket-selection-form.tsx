@@ -288,6 +288,8 @@ export default function TicketSelectionForm() {
         timestamp: new Date().toISOString()
       };
       
+      console.log(transactionRecord);
+
       const { data, error } = await supabaseClient
         .from('transactions')
         .insert(transactionRecord)
