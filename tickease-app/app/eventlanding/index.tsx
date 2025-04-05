@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { supabase } from '@/utils/supabase';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,32 +11,12 @@ export default function MyEvents() {
     const insets = useSafeAreaInsets();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false); // State for pull-to-refresh
 
     useEffect(() => {
         loadEvents();
     }, []);
 
-    // Function to validate if an event has all required fields
-    const isValidEvent = (event) => {
-        const requiredFields = [
-            'title',
-            'description',
-            'venue',
-            'image',
-            'category',
-            'eventDate', // Using eventDate instead of date
-            'eventTime', // Using eventTime instead of time
-            'form_schema'
-        ];
-
-        return requiredFields.every(field =>
-            event[field] !== undefined &&
-            event[field] !== null &&
-            event[field] !== ''
-        );
-    };
-
+   
     // Updated function to load events using the utility function
     async function loadEvents() {
         try {
@@ -46,26 +25,15 @@ export default function MyEvents() {
 
             if (error) {
                 console.error('Error fetching events:', error);
-                // TODO: Add user-facing error handling (e.g., Toast)
             } else {
                 setEvents(events);
             }
         } catch (error) {
-            console.error('Unexpected error fetching events:', error);
-             // TODO: Add user-facing error handling
+            console.error('Error:', error);
         } finally {
-             if (!isRefreshing) {
-                 setLoading(false);
-             }
-             setRefreshing(false); // Ensure refreshing indicator stops
+            setLoading(false);
         }
-    };
-
-    const onRefresh = () => {
-        setRefreshing(true);
-        fetchEvents(true); // Pass true to indicate it's a refresh call
-    };
-
+    }
 
     const navigateToCreateEvent = () => {
         router.push('/landing_form');
@@ -74,7 +42,7 @@ export default function MyEvents() {
     const EventItem = ({ event }) => (
         <TouchableOpacity
             style={styles.eventCard}
-            onPress={() => router.push(`/account`)}
+            onPress={() => router.push('/account')}
         >
             <View style={styles.eventCardHeader}>
                 {event.eventDate ? (
@@ -128,7 +96,6 @@ export default function MyEvents() {
         </TouchableOpacity>
     );
 
-    // --- Main Component Render ---
     return (
         <View style={styles.mainContainer}>
             <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -182,7 +149,6 @@ export default function MyEvents() {
     );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
     mainContainer: {
         flex: 1,
@@ -200,20 +166,19 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: '#6366F1',
-        paddingBottom: 16, // Adjusted padding
+        paddingBottom: 24,
         paddingHorizontal: 20,
-        // No margin bottom needed as it's fixed
+        marginBottom: 10,
         borderBottomLeftRadius: 24,
         borderBottomRightRadius: 24,
-        shadowColor: '#4f46e5',
+        shadowColor: '#6366F1',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
-        elevation: 6, // Increased elevation for prominence
-        zIndex: 10, // Ensure header is above scroll content if needed
+        elevation: 5,
     },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: 'bold',
         color: '#FFF',
     },
@@ -224,106 +189,101 @@ const styles = StyleSheet.create({
     },
     eventCard: {
         backgroundColor: 'white',
-        borderRadius: 12,
+        borderRadius: 16,
         marginBottom: 16,
-        shadowColor: '#94a3b8',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        elevation: 3, // Subtle elevation
-        overflow: Platform.OS === 'android' ? 'hidden' : 'visible', // Elevation fix and allow shadow on iOS
+        shadowColor: '#6366F1',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(226, 232, 240, 0.8)',
     },
     eventCardHeader: {
         flexDirection: 'row',
         padding: 16,
-        alignItems: 'center',
     },
     eventDateBadge: {
-        width: 56,
-        height: 56,
-        backgroundColor: '#EEF2FF',
-        borderRadius: 10,
+        width: 60,
+        height: 60,
+        backgroundColor: '#F5F7FF',
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(226, 232, 240, 0.5)',
     },
     eventDateDay: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: '#4338CA',
+        color: '#6366F1',
     },
     eventDateMonth: {
-        fontSize: 12,
-        color: '#64748B',
+        fontSize: 14,
+        color: '#64748b',
         textTransform: 'uppercase',
-        marginTop: 2,
     },
     eventDetails: {
         flex: 1,
         justifyContent: 'center',
     },
     eventTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '600',
-        color: '#1E293B',
-        marginBottom: 4,
+        color: '#1e293b',
+        marginBottom: 6,
     },
     eventMetaRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 4, // Consistent spacing
+        marginTop: 4,
     },
     eventMeta: {
-        fontSize: 13,
-        color: '#64748B',
-        marginLeft: 6,
+        fontSize: 14,
+        color: '#64748b',
+        marginLeft: 4,
     },
     eventCardFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingVertical: 12,
         borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-        backgroundColor: '#FDFEFF', // Slightly different footer bg
+        borderTopColor: '#f1f5f9',
+        backgroundColor: '#FAFBFF',
     },
     eventStatus: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center',
     },
     eventStatusUpcoming: {
-        backgroundColor: '#DBEAFE', // Lighter blue background
+        backgroundColor: 'rgba(99, 102, 241, 0.15)',
     },
     eventStatusCompleted: {
-        backgroundColor: '#DCFCE7', // Lighter green background
+        backgroundColor: 'rgba(34, 197, 94, 0.15)',
     },
     eventStatusText: {
         fontSize: 12,
         fontWeight: '600',
+        color: '#6366F1',
     },
-     eventStatusTextUpcoming: {
-         color: '#3B82F6', // Blue text
-    },
-    eventStatusTextCompleted: {
-         color: '#16A34A', // Green text
-    },
-    loadingContainer: {
-        flex: 1,
-        alignItems: 'center',
+    eventAction: {
+        width: 32,
+        height: 32,
         justifyContent: 'center',
-        paddingVertical: 80, // More vertical padding
+        alignItems: 'center',
+        borderRadius: 16,
     },
-    loadingText: {
-        marginTop: 12,
-        fontSize: 16,
-        color: '#64748b',
-    },
-     noEventsContainer: {
-        marginTop: 60, // More margin top
+    noEventsContainer: {
+        backgroundColor: 'white',
+        borderRadius: 12,
+        padding: 40,
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: '#000',
@@ -334,8 +294,8 @@ const styles = StyleSheet.create({
         marginTop: 40,
     },
     noEventsText: {
-        fontSize: 17, // Slightly larger
-        color: '#475569',
+        fontSize: 16,
+        color: '#666',
         textAlign: 'center',
     },
     fabWrapper: {
@@ -360,10 +320,8 @@ const styles = StyleSheet.create({
     fabTooltipText: {
         fontSize: 13,
         textAlign: 'center',
-        marginTop: 8,
-        lineHeight: 20, // Improved readability
+        color: '#333',
     },
-    // --- FAB Styling ---
     fab: {
         width: 64,
         height: 64,
@@ -371,7 +329,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#6366F1',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#4338CA',
+        shadowColor: '#6366F1',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
