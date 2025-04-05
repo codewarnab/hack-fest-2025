@@ -299,8 +299,79 @@ const uploadImageToSupabase = async (imageFile) => {
     }
 };
 
-export { updateProfile, initializeEvent, updateEvent, createTickets, uploadImageToSupabase };
+interface Event {
+    id: string;
+    title: string;
+    description: string;
+    venue: string;
+    image: string;
+    category: string;
+    eventDate: string;
+    eventTime: string;
+    form_schema: any;
+    user_id: string;
+    [key: string]: any;
+}
 
+// Function to validate if an event has all required fields
+const isValidEvent = (event: Event) => {
+    const requiredFields = [
+        'title',
+        'description',
+        'venue',
+        'image',
+        'category',
+        'eventDate',
+        'eventTime',
+        'form_schema'
+    ];
+
+    return requiredFields.every(field =>
+        event[field] !== undefined &&
+        event[field] !== null &&
+        event[field] !== ''
+    );
+};
+
+const fetchUserEvents = async () => {
+    try {
+        // Get the current user session
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+            console.error('Error getting session:', sessionError);
+            return { events: [], error: sessionError };
+        }
+
+        const userId = sessionData?.session?.user?.id;
+
+        if (!userId) {
+            console.error('No user logged in');
+            return { events: [], error: new Error('No user logged in') };
+        }
+
+        // Query events for the current user only
+        const { data, error } = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', userId) // Filter events by user_id
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching events:', error);
+            return { events: [], error };
+        } else {
+            // Filter events to only include those with all required fields
+            const validEvents = (data || []).filter(isValidEvent);
+            return { events: validEvents, error: null };
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        return { events: [], error };
+    }
+};
+
+export { updateProfile, initializeEvent, updateEvent, createTickets, uploadImageToSupabase, fetchUserEvents };
 
 const storeWithExpiry = async (key: string, value: any, ttlInMs: number) => {
     const now = Date.now();

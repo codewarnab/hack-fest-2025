@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import NotificationComponent from '../notif';
+import { fetchUserEvents } from '@/utils/functions'; // Import the utility function
 
 export default function MyEvents() {
     const insets = useSafeAreaInsets();
@@ -13,7 +14,7 @@ export default function MyEvents() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetchEvents();
+        loadEvents();
     }, []);
 
     // Function to validate if an event has all required fields
@@ -36,22 +37,16 @@ export default function MyEvents() {
         );
     };
 
-    async function fetchEvents() {
+    // Updated function to load events using the utility function
+    async function loadEvents() {
         try {
             setLoading(true);
-
-            // Example query - you'll need to adjust this based on your Supabase schema
-            const { data, error } = await supabase
-                .from('events')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { events, error } = await fetchUserEvents();
 
             if (error) {
                 console.error('Error fetching events:', error);
             } else {
-                // Filter events to only include those with all required fields
-                const validEvents = (data || []).filter(isValidEvent);
-                setEvents(validEvents);
+                setEvents(events);
             }
         } catch (error) {
             console.error('Error:', error);
