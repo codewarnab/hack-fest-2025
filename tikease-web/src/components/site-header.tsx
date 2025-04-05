@@ -10,7 +10,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center space-x-2">
             <Ticket className="h-6 w-6 text-primary" />
-            <span className="font-bold text-xl text-primary">EventTix</span>
+            <span className="font-bold text-xl text-primary">Tickease</span>
           </Link>
           <nav className="hidden md:flex items-center space-x-6 text-sm font-medium ml-6">
             <Link href="#about" className="transition-colors hover:text-primary">
