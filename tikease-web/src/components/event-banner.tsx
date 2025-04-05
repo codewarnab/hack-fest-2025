@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Clock, MapPin, Users } from "lucide-react"
@@ -14,6 +13,7 @@ interface EventBannerProps {
     date: string
     time: string
     location: string
+    description: string
     image: string
     category: string
     attendees: number
@@ -27,6 +27,9 @@ export default function EventBanner({ event }: EventBannerProps) {
   const handleClick = () => {
     router.push("/registration")
   }
+  const handleLearnMore = () => {
+    router.push(`/event/${event.id}`)
+  }
   useEffect(() => {
     // Delay animation to ensure it runs after component mount
     const timer = setTimeout(() => {
@@ -39,12 +42,10 @@ export default function EventBanner({ event }: EventBannerProps) {
   return (
     <div className="relative w-full h-[500px] md:h-[600px] overflow-hidden rounded-lg">
       {/* Background image with overlay */}
-      <Image
+      <img
         src={event.image || "/placeholder.svg"}
         alt={`${event.title} banner`}
-        fill
-        className="object-cover"
-        priority
+        className="absolute inset-0 w-full h-full object-cover"
       />
 
       {/* Gradient overlay */}
@@ -113,6 +114,7 @@ export default function EventBanner({ event }: EventBannerProps) {
             <Button
               size="lg"
               variant="outline"
+              onClick={handleLearnMore}
               className="bg-black/30 text-white border-white/30 hover:bg-black/50 hover:text-white"
             >
               Learn More
