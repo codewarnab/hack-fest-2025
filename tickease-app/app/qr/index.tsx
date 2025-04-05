@@ -24,7 +24,7 @@ const QRCodeDisplay = () => {
     const [eventId, setEventId] = useState<string | null>(null);
     // --- Configuration (Hardcoded for now) ---
     // Replace with dynamic ID later
-    const baseUrl = 'https://tickease.vercel.app/'; // Use your actual local dev URL or deployment URL
+    const baseUrl = 'https://tickease.vercel.app'; // Use your actual local dev URL or deployment URL
 
     // Function to redirect to event landing page
     const navigateToHome = () => {
