@@ -323,7 +323,7 @@ const isValidEvent = (event: Event) => {
         'category',
         'eventDate',
         'eventTime',
-        'form_schema'
+        'custon_forms'
     ];
 
     return requiredFields.every(field =>
@@ -337,6 +337,8 @@ const fetchUserEvents = async () => {
     try {
         // Get the current user session
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        // console.log(sessionData);
+        // console.log(sessionError);
 
         if (sessionError) {
             console.error('Error getting session:', sessionError);
@@ -356,13 +358,15 @@ const fetchUserEvents = async () => {
             .select('*')
             .eq('user_id', userId) // Filter events by user_id
             .order('created_at', { ascending: false });
-
+        // console.log('Fetched events:', data, error);
         if (error) {
             console.error('Error fetching events:', error);
             return { events: [], error };
         } else {
             // Filter events to only include those with all required fields
+            // console.log('Fetched events:', data);
             const validEvents = (data || []).filter(isValidEvent);
+            console.log('Valid events:', validEvents);
             return { events: validEvents, error: null };
         }
     } catch (error) {
