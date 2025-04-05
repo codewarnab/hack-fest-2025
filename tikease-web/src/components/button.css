@@ -1,0 +1,31 @@
+/* Glowing animation for the button */
+.glow-animation {
+    background: linear-gradient(45deg, red, yellow);
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.8), 0 0 20px rgba(255, 255, 0, 0.8);
+    animation: glow 1.5s infinite alternate;
+}
+
+@keyframes glow {
+    0% {
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.8), 0 0 20px rgba(255, 255, 0, 0.8);
+    }
+    100% {
+        box-shadow: 0 0 20px rgba(255, 0, 0, 1), 0 0 40px rgba(255, 255, 0, 1);
+    }
+}
+
+/* Slide-in animation for the chat interface */
+.slide-in-animation {
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    0% {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
