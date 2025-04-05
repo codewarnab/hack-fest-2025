@@ -8,60 +8,61 @@ import { useEffect, useState } from "react"
 export function ThemeToggle() {
   const { setTheme, theme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  const [isTransitioning, setIsTransitioning] = useState(false)
-
+  const [animating, setAnimating] = useState(false)
+  
   // Avoid hydration mismatch
   useEffect(() => {
     setMounted(true)
   }, [])
 
   const toggleTheme = () => {
-    setIsTransitioning(true)
+    // Start animation
+    setAnimating(true)
     
-    // Set a small delay to allow animation to complete before changing theme
+    // Wait for animation to start before changing theme
     setTimeout(() => {
       setTheme(theme === 'dark' ? 'light' : 'dark')
       
-      // Reset transition state after animation completes
+      // Clear animation state after transition completes
       setTimeout(() => {
-        setIsTransitioning(false)
-      }, 300)
-    }, 150)
+        setAnimating(false)
+      }, 600)
+    }, 10)
   }
 
   if (!mounted) {
     return null
   }
 
+  const isDark = theme === 'dark'
+  const currentIcon = isDark ? 'moon' : 'sun'
+  const targetIcon = animating ? (isDark ? 'sun' : 'moon') : currentIcon
+
   return (
     <Button 
       variant="ghost" 
       size="icon" 
       onClick={toggleTheme}
-      className="rounded-full relative flex items-center justify-center"
-      disabled={isTransitioning}
+      className="rounded-full relative flex items-center justify-center h-10 w-10"
+      disabled={animating}
     >
-      <div className="relative flex items-center justify-center w-6 h-6">
+      <div className="relative flex items-center justify-center w-full h-full">
         {/* Sun Icon */}
         <Sun 
-          className={`absolute transition-all duration-300 ${
-            isTransitioning 
-              ? 'transform rotate-180 scale-150' 
-              : theme === 'dark' 
-                ? 'opacity-0 rotate-90 scale-0' 
-                : 'opacity-100 rotate-0 scale-100'
-          }`} 
+          className={`absolute h-5 w-5 transform transition-all duration-500 ease-in-out ${
+            targetIcon === 'sun' 
+              ? 'opacity-100 rotate-0 scale-100' 
+              : 'opacity-0 rotate-90 scale-0'
+          }`}
         />
         
         {/* Moon Icon */}
         <Moon 
-          className={`absolute transition-all duration-300 ${
-            isTransitioning 
-              ? 'transform -rotate-180 scale-150' 
-              : theme === 'dark' 
-                ? 'opacity-100 rotate-0 scale-100' 
-                : 'opacity-0 -rotate-90 scale-0'
-          }`} 
+          className={`absolute h-5 w-5 transform transition-all duration-500 ease-in-out ${
+            targetIcon === 'moon' 
+              ? 'opacity-100 rotate-0 scale-100' 
+              : 'opacity-0 -rotate-90 scale-0'
+          }`}
         />
       </div>
       <span className="sr-only">Toggle theme</span>

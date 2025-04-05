@@ -393,7 +393,7 @@ useEffect(() => {
       let userId = null;
       
       const { data: existingUser, error: userError } = await supabase
-        .from('users')
+        .from('web_users')
         .select('id')
         .eq('email', registrationData.email)
         .maybeSingle();
@@ -408,7 +408,7 @@ useEffect(() => {
       } else {
         // Create new user
         const { data: newUser, error: createUserError } = await supabase
-          .from('users')
+          .from('web_users')
           .insert({
             name: registrationData.fullName,
             email: registrationData.email,
@@ -426,6 +426,8 @@ useEffect(() => {
         
         userId = newUser.id;
       }
+      localStorage.setItem("userId", userId);
+      console.log("UserId ID saved to localStorage:", userId);
       
       // Now save the registration data
       const { error: registrationError } = await supabase

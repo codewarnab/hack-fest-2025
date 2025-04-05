@@ -11,6 +11,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import EventStorage from "@/components/event-storage";
+import ChatbotButton from "@/components/chatbot-button";
 
 // Define categories array similar to event-categories.tsx
 const categories = [
@@ -56,7 +57,7 @@ async function getEvent(id: string) {
 }
 
 export default async function EventPage({ params }: { params: { id: string } }) {
-  const { id } = await params;
+  const id = params.id;
   const event = await getEvent(id);
 
   if (!event) {
@@ -77,13 +78,13 @@ export default async function EventPage({ params }: { params: { id: string } }) 
   const bannerEvent = {
     id: event.id,
     title: event.title,
-    date: new Date(event.start_date).toLocaleDateString(),
-    time: `${new Date(event.start_date).toLocaleTimeString()} - ${new Date(event.end_date).toLocaleTimeString()}`,
+    date: event.eventDate||"15/09/2025",
+    time: `2 Days`,
     location: event.venue,
     description: event.description,
     image: event.image || "/placeholder.svg",
     category: event.context,
-    attendees: event.attendees || 0,
+    attendees: event.attendees || 1500,
     featured: event.featured || false,
   };
 
@@ -189,6 +190,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
         </div>
       </div>
     </div>
+    <ChatbotButton />
     </>
   );
 }
