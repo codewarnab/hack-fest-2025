@@ -47,22 +47,31 @@ export default function ChatInterface() {
   }, [messages, isLoading]);
 
 
-  // Render message content using Markdown
+  // Updated the renderMessageContent function to handle parsing errors gracefully
   const renderMessageContent = (content: string | null | undefined) => {
     if (!content) return null;
-    return (
-      <div className="prose prose-sm dark:prose-invert max-w-none break-words"> {/* Added prose styling + break-words */}
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          components={{ // Customize rendering if needed
-            // Example: open links in new tab
-            a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
-    );
+    try {
+        return (
+            <div className="prose prose-sm dark:prose-invert max-w-none break-words"> {/* Added prose styling + break-words */}
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{ // Customize rendering if needed
+                        // Example: open links in new tab
+                        a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+                    }}
+                >
+                    {content}
+                </ReactMarkdown>
+            </div>
+        );
+    } catch (error) {
+        console.error("Failed to parse message content:", error);
+        return (
+            <div className="text-destructive">
+                <p>Error parsing message content. Please try again later.</p>
+            </div>
+        );
+    }
   };
 
   return (
