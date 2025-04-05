@@ -12,16 +12,16 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Loader2 } from "lucide-react"
-import { saveRegistrationProgress, getRegistrationProgress } from "@/lib/cookies"
+import { saveRegistrationProgress, getRegistrationProgress, getCookie, COOKIE_NAMES } from "@/lib/cookies"
 import { generateTransactionId, formatCurrency } from "@/lib/utils"
 import { useAnalytics } from "@/components/analytics-provider"
+import { createClient } from "../../utils/supabase/client"
 
 declare global {
   interface Window {
     Razorpay: any;
   }
 }
-
 
 const formSchema = z.object({
   ticketType: z.string({
@@ -32,6 +32,9 @@ const formSchema = z.object({
   promoCode: z.string().optional(),
 })
 
+// Create a single instance of the Supabase client to prevent multiple GoTrueClient instances
+const supabaseClient = createClient();
+
 export default function TicketSelectionForm() {
   const router = useRouter()
   const { trackEvent } = useAnalytics()
@@ -41,8 +44,51 @@ export default function TicketSelectionForm() {
   const [promoCodeValid, setPromoCodeValid] = useState<boolean | null>(null)
   const [promoDiscount, setPromoDiscount] = useState<number>(0)
   const [isRazorpayLoaded, setIsRazorpayLoaded] = useState(false);
+  const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [eventId, setEventId] = useState<any>(undefined);
 
-  // Dummy Data - now directly inside the component
+  // Default demo event ID to use if none is found in cookies
+
+  useEffect(() => {
+    // Load Razorpay SDK
+    if (!window.Razorpay && !document.getElementById('razorpay-script')) {
+      const script = document.createElement("script");
+      script.id = 'razorpay-script';
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => {
+        console.log("Razorpay SDK loaded successfully");
+        setIsRazorpayLoaded(true);
+      };
+      script.onerror = () => console.error("Failed to load Razorpay SDK");
+      document.body.appendChild(script);
+    } else if (window.Razorpay) {
+      setIsRazorpayLoaded(true);
+    }
+    
+    // Get the user ID from cookies first, then check localStorage as fallback
+    let userIdFromCookie = getCookie("userId");
+    
+    // If user ID not found in cookie, try localStorage
+    if (!userIdFromCookie) {
+      const localStorageUserId = localStorage.getItem("userId");
+      if (localStorageUserId) {
+        userIdFromCookie = localStorageUserId;
+        // Save to cookie for future consistency
+        document.cookie = `userId=${localStorageUserId}; path=/; max-age=86400`;
+      }
+    }
+    
+    // Try to get event ID from cookies or URL parameters
+    let eventIdFromCookie = localStorage.getItem("EventId");
+    
+    setUserId(userIdFromCookie);
+    setEventId(eventIdFromCookie);
+    
+    console.log("User ID from cookie or localStorage:", userIdFromCookie);
+    console.log("Event ID from cookie or default:", eventIdFromCookie);
+  }, []);
+
   const dummyTicketData = {
     ticketTypes: [
       { value: "standard", label: "Standard Pass", price: 49, description: "Access to all conference sessions and keynotes.", maxQuantity: 5 },
@@ -66,14 +112,13 @@ export default function TicketSelectionForm() {
     companyName: "Tickease",
     eventDescription: "Business Innovation Conference 2024 Ticket Purchase",
     venueAddress: "Convention Center, New York, NY",
-    validPromoCodes: { // Promo codes are now part of dummy data
-      TECH25: 25, // 25% discount
-      WELCOME10: 10, // 10% discount
-      EARLYBIRD: 15, // 15% discount
-      VIP2025: 50, // $50 off
+    validPromoCodes: {
+      TECH25: 25,
+      WELCOME10: 10,
+      EARLYBIRD: 15,
+      VIP2025: 50,
     }
   };
-
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -85,37 +130,22 @@ export default function TicketSelectionForm() {
     },
   })
 
-
   const watchTicketType = form.watch("ticketType")
   const watchQuantity = form.watch("quantity")
   const watchAddons = form.watch("addons") || []
   const watchPromoCode = form.watch("promoCode")
 
-  // Dynamically load the Razorpay script
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => setIsRazorpayLoaded(true);
-    script.onerror = () => console.error("Failed to load Razorpay SDK");
-    document.body.appendChild(script);
-  }, []);
-
-
-  // Load saved progress and registration data
   useEffect(() => {
     const savedProgress = getRegistrationProgress()
     if (savedProgress.ticketSelection) {
       form.reset(savedProgress.ticketSelection)
     }
 
-    // Get registration data from session storage
     const registrationDataStr = sessionStorage.getItem("registrationData")
     if (registrationDataStr) {
       setRegistrationData(JSON.parse(registrationDataStr))
     }
 
-    // Track form start
     trackEvent("form_start", {
       formName: "ticket_selection",
       timestamp: new Date().toISOString(),
@@ -123,7 +153,6 @@ export default function TicketSelectionForm() {
 
     setFormStartTime(Date.now())
 
-    // Track field interactions
     const handleFieldInteraction = (fieldName: string) => {
       trackEvent("form_field_interaction", {
         formName: "ticket_selection",
@@ -132,7 +161,6 @@ export default function TicketSelectionForm() {
       })
     }
 
-    // Add event listeners to form fields
     const formElement = document.querySelector("form")
     if (formElement) {
       const inputElements = formElement.querySelectorAll("input, select, textarea")
@@ -144,7 +172,6 @@ export default function TicketSelectionForm() {
     }
 
     return () => {
-      // Clean up event listeners
       if (formElement) {
         const inputElements = formElement.querySelectorAll("input, select, textarea")
         inputElements.forEach((element) => {
@@ -154,7 +181,6 @@ export default function TicketSelectionForm() {
     }
   }, [form, trackEvent])
 
-  // Save progress as user fills out the form
   useEffect(() => {
     const subscription = form.watch((value) => {
       saveRegistrationProgress("ticketSelection", value)
@@ -163,17 +189,15 @@ export default function TicketSelectionForm() {
     return () => subscription.unsubscribe()
   }, [form])
 
-  // Validate promo code
   useEffect(() => {
     if (watchPromoCode && watchPromoCode.length > 0) {
-      const validPromoCodes = dummyTicketData.validPromoCodes; // Get promo codes from dummy data
+      const validPromoCodes = dummyTicketData.validPromoCodes;
       const code = watchPromoCode.toUpperCase()
 
       if (validPromoCodes[code as keyof typeof validPromoCodes]) {
         setPromoCodeValid(true)
         setPromoDiscount(validPromoCodes[code as keyof typeof validPromoCodes])
 
-        // Track successful promo code
         trackEvent("promo_code_applied", {
           code: code,
           discount: validPromoCodes[code as keyof typeof validPromoCodes],
@@ -183,7 +207,6 @@ export default function TicketSelectionForm() {
         setPromoCodeValid(false)
         setPromoDiscount(0)
 
-        // Track invalid promo code
         trackEvent("promo_code_invalid", {
           code: watchPromoCode,
           ticketType: watchTicketType,
@@ -208,7 +231,6 @@ export default function TicketSelectionForm() {
     return foundAddon ? foundAddon.price : 0;
   }
 
-
   const calculateSubtotal = () => {
     const ticketTotal = getTicketPrice(watchTicketType) * watchQuantity;
 
@@ -224,12 +246,10 @@ export default function TicketSelectionForm() {
 
     const subtotal = calculateSubtotal()
 
-    // If discount is a percentage
     if (promoDiscount < 100) {
       return Math.round((subtotal * promoDiscount) / 100)
     }
 
-    // If discount is a fixed amount
     return Math.min(promoDiscount, subtotal)
   }
 
@@ -240,6 +260,95 @@ export default function TicketSelectionForm() {
     return subtotal - discount
   }
 
+  const saveTransactionToDatabase = async (transactionData: any, status: string = "pending") => {
+    try {
+      console.log("Starting saveTransactionToDatabase with data:", JSON.stringify(transactionData));
+      console.log("Transaction status:", status);
+      
+      if (!userId || !eventId) {
+        console.error("Missing user ID or event ID from cookies");
+        return { success: false, error: "Missing user ID or event ID" };
+      }
+      
+      const currentDate = new Date();
+      console.log("Current date object:", currentDate);
+      console.log("Current date ISO string:", currentDate.toISOString());
+      console.log("Current date timestamp:", currentDate.getTime());
+      
+      // Fix: Convert addons array to PostgreSQL array format using the array_to_string function
+      const transactionRecord = {
+        transaction_id: transactionData.transactionId,
+        event_id: eventId,
+        user_id: userId,
+        ticket_type: transactionData.ticketType,
+        quantity: transactionData.quantity.toString(),
+        // Fix: Store addons as a proper PostgreSQL array
+        addons: transactionData.addons || [],  // Send as a true array, not as a JSON string
+        total_amount: transactionData.totalPrice.toString(),
+        payment_method: transactionData.paymentMethod || "Razorpay",
+        discount: transactionData.discount ? transactionData.discount.toString() : "0.00",
+        promo_code: transactionData.promoCode || null,
+        status: status,
+        timestamp: currentDate.toISOString()
+      };
+      
+      console.log("Transaction record to be inserted:", JSON.stringify(transactionRecord));
+      
+      const { data, error } = await supabaseClient
+        .from('transactions')
+        .insert(transactionRecord)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error saving transaction:", error);
+        return { success: false, error: error.message };
+      }
+      
+      console.log("Transaction saved successfully:", data);
+      return { success: true, data };
+    } catch (error) {
+      console.error("Transaction save error:", error);
+      return { success: false, error: String(error) };
+    }
+  };
+
+  const updateTransactionStatus = async (transactionId: string, status: string, paymentDetails?: any) => {
+    try {
+      console.log("Starting updateTransactionStatus for transaction:", transactionId);
+      console.log("New status:", status);
+      console.log("Payment details:", paymentDetails ? JSON.stringify(paymentDetails) : "None");
+      
+      const updateData: any = {
+        status: status,
+      };
+      
+      // If payment details are provided, add them to the update
+      if (paymentDetails) {
+        updateData.payment_details = JSON.stringify(paymentDetails);
+      }
+      
+      console.log("Update data being sent to Supabase:", JSON.stringify(updateData));
+      
+      const { data, error } = await supabaseClient
+        .from('transactions')
+        .update(updateData)
+        .eq('transaction_id', transactionId)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error("Error updating transaction:", error);
+        return { success: false, error: error.message };
+      }
+      
+      console.log("Transaction updated successfully:", data);
+      return { success: true, data };
+    } catch (error) {
+      console.error("Transaction update error:", error);
+      return { success: false, error: String(error) };
+    }
+  };
 
   const initiateRazorpayPayment = async (values: z.infer<typeof formSchema>) => {
     if (!isRazorpayLoaded) {
@@ -251,10 +360,35 @@ export default function TicketSelectionForm() {
 
     try {
       const totalAmount = calculateTotal();
+      const transactionId = generateTransactionId();
+      
+      // Prepare complete ticket data
+      const completeTicketData = {
+        ...values,
+        subtotal: calculateSubtotal(),
+        discount: calculateDiscount(),
+        totalPrice: calculateTotal(),
+        purchaseDate: new Date().toISOString(),
+        transactionId: transactionId,
+        timeSpentOnForm: Math.floor((Date.now() - formStartTime) / 1000),
+        paymentMethod: "Razorpay",
+      };
+      
+      // First create a pending transaction record
+      const initialSaveResult = await saveTransactionToDatabase(completeTicketData, "pending");
+      if (!initialSaveResult.success) {
+        console.error("Failed to create pending transaction record:", initialSaveResult.error);
+        alert("Failed to process your order. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
+      
+      console.log("Pending transaction saved:", initialSaveResult.data);
+
       const res = await fetch("/api/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: totalAmount, currency: "INR", receipt: generateTransactionId() }),
+        body: JSON.stringify({ amount: totalAmount, currency: "INR", receipt: transactionId }),
       });
 
       const order = await res.json();
@@ -263,48 +397,60 @@ export default function TicketSelectionForm() {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: order.currency,
-        name: dummyTicketData.companyName, // Use company name from dummy data
-        description: dummyTicketData.eventDescription, // Use event description from dummy data
+        name: dummyTicketData.companyName,
+        description: dummyTicketData.eventDescription,
         order_id: order.id,
         handler: async function (response: any) {
-          alert(`Payment successful: ${response.razorpay_payment_id}`);
+          // Payment successful - update transaction status
+          const razorpayPaymentId = response.razorpay_payment_id;
+          
+          // Update transaction with payment details
+          const updateResult = await updateTransactionStatus(
+            transactionId, 
+            "completed",
+            {
+              razorpay_payment_id: razorpayPaymentId,
+              razorpay_order_id: order.id,
+              razorpay_signature: response.razorpay_signature,
+              payment_time: new Date().toISOString()
+            }
+          );
+          
+          if (!updateResult.success) {
+            console.error("Failed to update transaction status:", updateResult.error);
+          } else {
+            console.log("Transaction status updated to completed:", updateResult.data);
+          }
 
-          // Calculate time spent on form
-          const timeSpent = Math.floor((Date.now() - formStartTime) / 1000)
-          const transactionId = generateTransactionId();
+          alert(`Payment successful: ${razorpayPaymentId}`);
 
-          // Track successful purchase
           trackEvent("purchase_completed", {
             transactionId,
             ticketType: values.ticketType,
             quantity: values.quantity,
             totalAmount: calculateTotal(),
             paymentMethod: "Razorpay",
+            razorpayPaymentId,
           });
-           // Prepare complete ticket data
-            const completeTicketData = {
-              ...values,
-              subtotal: calculateSubtotal(),
-              discount: calculateDiscount(),
-              totalPrice: calculateTotal(),
-              purchaseDate: new Date().toISOString(),
-              transactionId: response.razorpay_payment_id,
-              timeSpentOnForm: timeSpent,
-              paymentMethod: "Razorpay",
-            };
 
-            // Store ticket data in session storage
-            sessionStorage.setItem("ticketData", JSON.stringify(completeTicketData));
-            console.log("Ticket data stored in session storage:", completeTicketData);
-            router.push("/confirmation");
-
+          // Store ticket data in session storage with updated payment info
+          const finalTicketData = {
+            ...completeTicketData,
+            razorpayPaymentId,
+            status: "completed",
+          };
+          
+          sessionStorage.setItem("ticketData", JSON.stringify(finalTicketData));
+          console.log("Ticket data stored in session storage:", finalTicketData);
+          router.push("/confirmation");
         },
         prefill: {
           name: registrationData?.firstName + " " + registrationData?.lastName || "Guest User",
           email: registrationData?.email || "guest@example.com",
         },
         notes: {
-          address: dummyTicketData.venueAddress, // Use venue address from dummy data
+          address: dummyTicketData.venueAddress,
+          transaction_id: transactionId,
         },
         theme: {
           color: "#3399cc",
@@ -313,10 +459,24 @@ export default function TicketSelectionForm() {
 
       const rzp = new window.Razorpay(options);
       rzp.open();
-      rzp.on('payment.failed', function (response: any){
+      rzp.on('payment.failed', async function (response: any){
+        // Payment failed - update transaction status
+        await updateTransactionStatus(
+          transactionId, 
+          "failed",
+          {
+            error_code: response.error.code,
+            error_description: response.error.description,
+            error_source: response.error.source,
+            error_step: response.error.step,
+            error_reason: response.error.reason,
+            failure_time: new Date().toISOString()
+          }
+        );
+        
         alert(`Payment Failed: ${response.error.code} - ${response.error.description}`);
         trackEvent("purchase_failed", {
-          transactionId: generateTransactionId(),
+          transactionId,
           ticketType: values.ticketType,
           quantity: values.quantity,
           totalAmount: calculateTotal(),
@@ -327,7 +487,6 @@ export default function TicketSelectionForm() {
         setIsSubmitting(false);
       });
 
-
     } catch (error) {
       console.error("Payment failed:", error);
       alert("Payment failed. Please try again.");
@@ -337,29 +496,10 @@ export default function TicketSelectionForm() {
     }
   };
 
-
   function onSubmit(values: z.infer<typeof formSchema>) {
-
-    // Track form submission
-    trackEvent("purchase_initiated", {
-      formName: "ticket_selection",
-      timeSpent: Math.floor((Date.now() - formStartTime) / 1000),
-      transactionId: generateTransactionId(),
-      ticketType: values.ticketType,
-      quantity: values.quantity,
-      addons: values.addons,
-      paymentMethod: "Razorpay",
-      totalAmount: calculateTotal(),
-      hasPromoCode: !!values.promoCode && promoCodeValid,
-      discount: calculateDiscount(),
-    });
-
-
     initiateRazorpayPayment(values);
-
   }
 
-  //reset ticket quantity
   useEffect(() => {
     const ticketType = dummyTicketData.ticketTypes.find(type => type.value === watchTicketType);
     if (ticketType) {
@@ -522,7 +662,6 @@ export default function TicketSelectionForm() {
             </div>
           </CardContent>
         </Card>
-
 
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? (

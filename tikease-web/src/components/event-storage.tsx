@@ -8,9 +8,10 @@ interface EventStorageProps {
 
 export default function EventStorage({ eventId }: EventStorageProps) {
   useEffect(() => {
+    console.log("Event ID:", eventId);
     // Save event ID to localStorage when the component mounts
     if (typeof window !== "undefined") {
-      localStorage.setItem("eventId", eventId);
+      localStorage.setItem("EventId", eventId);
       console.log("Event ID saved to localStorage:", eventId);
     }
   }, [eventId]);
