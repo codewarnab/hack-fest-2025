@@ -276,10 +276,7 @@ const AttendeeDemographicsPage = () => {
                         </View>
                      ) : <Text style={styles.noDataText}>No registration trend data available.</Text>}
                      {/* Optional: Add link to full registration timeline */}
-                      <TouchableOpacity style={styles.viewMoreButton} onPress={() => router.push('/analytics/registration-timeline')}>
-                        <Text style={styles.viewMoreButtonText}>View Full Timeline</Text>
-                        <Ionicons name="arrow-forward" size={16} color="#6366F1" />
-                    </TouchableOpacity>
+                     
                 </View>
 
             </ScrollView>

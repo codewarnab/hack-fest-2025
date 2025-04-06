@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
-
+import { getTotalTicketBought } from '@/utils/getevent';
+import { getTotalRevenue } from '@/utils/getevent';
 // --- Dummy Data ---
 // Enhanced dummy data for a richer overview
 const dummyEventData = {
@@ -28,10 +29,8 @@ const dummyEventData = {
   address: '1 Infinite Loop, Cupertino, CA',
   organizer: 'QuantumLeap Events',
   status: 'Upcoming',
-  // --- Analysis Data ---
-  totalTicketsSold: 178,
+  // Use eventId from URL params
   totalCapacity: 350,
-  estimatedRevenue: 13450.22,
   attendeesRegistered: 178, // Match sold tickets for now
   checkIns: 0, // Event hasn't started
   ticketsBreakdown: [
@@ -120,8 +119,34 @@ const EventOverviewPage = () => {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ event_id?: string }>();
   const eventId = params.event_id || dummyEventData.id;
-
+  const [totalTicketsSold, setTotalTicketsSold] = useState<number>(0);
+  const [totalRevenue, setTotalRevenue] = useState<number>(0);
   const eventData = dummyEventData; // Use dummy data
+  
+  useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        const tickets = await getTotalTicketBought(eventId);
+        setTotalTicketsSold(tickets || 0);
+      } catch (error) {
+        console.error("Error fetching tickets:", error);
+        setTotalTicketsSold(0);
+      }
+    };
+    
+    const fetchRevenue = async () => {
+      try {
+        const revenue = await getTotalRevenue(eventId);
+        setTotalRevenue(revenue || 0);
+      } catch (error) {
+        console.error("Error fetching revenue:", error);
+        setTotalRevenue(0);
+      }
+    };
+    
+    fetchTickets();
+    fetchRevenue();
+  }, [eventId]);
   const eventName = eventData.name || 'Event Overview';
 
   const formatCurrency = (amount: number): string => {
@@ -136,7 +161,9 @@ const EventOverviewPage = () => {
   
   const calculateTicketProgress = (): number => {
          if (!eventData.totalCapacity || eventData.totalCapacity === 0) return 0;
-         return Math.min((eventData.totalTicketsSold / eventData.totalCapacity) * 100, 100);
+         // Ensure totalTicketsSold is a number
+         const ticketsSold = Number(totalTicketsSold) || 0;
+         return Math.min((ticketsSold / eventData.totalCapacity) * 100, 100);
      }
 
 
@@ -207,9 +234,9 @@ const EventOverviewPage = () => {
           <View style={[styles.card, styles.quickGlanceCard]}>
               <SectionHeader title="At a Glance" />
               <View style={styles.insightsGrid}>
-                <InsightBlock iconName="ticket-outline" value={eventData.totalTicketsSold} label="Tickets Sold" iconColor="#3b82f6"/>
+                <InsightBlock iconName="ticket-outline" value={totalTicketsSold} label="Tickets Sold" iconColor="#3b82f6"/>
                  <InsightBlock iconName="people-outline" value={eventData.attendeesRegistered} label="Registered" iconColor="#a855f7"/>
-                <InsightBlock iconName="cash-outline" value={formatCurrency(eventData.estimatedRevenue)} label="Est. Revenue" iconColor="#10b981"/>
+                <InsightBlock iconName="cash-outline" value={formatCurrency(totalRevenue)} label="Est. Revenue" iconColor="#10b981"/>
                  <InsightBlock iconName="log-in-outline" value={`${eventData.checkIns} / ${eventData.attendeesRegistered}`} label="Checked In" iconColor="#f59e0b"/>
               </View>
            </View>
@@ -223,7 +250,7 @@ const EventOverviewPage = () => {
              <View style={styles.progressContainer}>
                  <View style={styles.progressHeader}>
                     <Text style={styles.progressLabel}>Overall Capacity</Text>
-                    <Text style={styles.progressPercentage}>{`${eventData.totalTicketsSold}/${eventData.totalCapacity}`}</Text>
+                    <Text style={styles.progressPercentage}>{`${totalTicketsSold}/${eventData.totalCapacity}`}</Text>
                  </View>
                  <View style={styles.progressBarBackground}>
                     <View style={[styles.progressBarForeground, { width: `${calculateTicketProgress()}%` }]} />
