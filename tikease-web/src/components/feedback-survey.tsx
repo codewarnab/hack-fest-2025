@@ -34,6 +34,7 @@ export default function FeedbackSurvey() {
     try {
       // Get current event ID
       const eventId = localStorage.getItem("EventId")
+      const userId = localStorage.getItem("userId")
       
       if (!eventId) {
         console.error("No event ID found in localStorage")
@@ -47,7 +48,7 @@ export default function FeedbackSurvey() {
         .update({
           feedback_rating: satisfaction  // Using the feedback_rating column in events table
         })
-        .eq('id', eventId)
+        .eq('user_id', userId)
 
       if (error) {
         console.error("Error saving feedback:", error)

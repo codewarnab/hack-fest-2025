@@ -229,31 +229,7 @@ const createTickets = async (eventId: string, tickets: Ticket[]) => {
     return "success";
 };
 
-// Final Ticket Page Data(Fixed Fields + Promo Codes)-- -
-//         (NOBRIDGE) LOG[
-//             {
-//                 "id": "ticket_1743831527192",
-//                 "label": "Gdud",
-//                 "maxQuantity": 64,
-//                 "price": 5,
-//                 "description": "Bdhdhf",
-//                 "addonOptions": [
-//                     {
-//                         "id": "addon_1743831529068",
-//                         "label": "Hshd",
-//                         "price": 64,
-//                         "description": ""
-//                     },
-//                     {
-//                         "id": "addon_1743831539849",
-//                         "label": "",
-//                         "price": 0,
-//                         "description": ""
-//                     }
-//                 ]
-//             }
-//         ]
-//             (NOBRIDGE) LOG-------------------------------------------------------
+
 
 const uploadImageToSupabase = async (imageFile) => {
     try {
@@ -323,7 +299,7 @@ const isValidEvent = (event: Event) => {
         'category',
         'eventDate',
         'eventTime',
-        'form_schema'
+        'custon_forms'
     ];
 
     return requiredFields.every(field =>
@@ -337,6 +313,8 @@ const fetchUserEvents = async () => {
     try {
         // Get the current user session
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        // console.log(sessionData);
+        // console.log(sessionError);
 
         if (sessionError) {
             console.error('Error getting session:', sessionError);
@@ -356,13 +334,15 @@ const fetchUserEvents = async () => {
             .select('*')
             .eq('user_id', userId) // Filter events by user_id
             .order('created_at', { ascending: false });
-
+        // console.log('Fetched events:', data, error);
         if (error) {
             console.error('Error fetching events:', error);
             return { events: [], error };
         } else {
             // Filter events to only include those with all required fields
+            // console.log('Fetched events:', data);
             const validEvents = (data || []).filter(isValidEvent);
+            console.log('Valid events:', validEvents);
             return { events: validEvents, error: null };
         }
     } catch (error) {

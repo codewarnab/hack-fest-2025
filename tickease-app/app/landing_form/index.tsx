@@ -11,23 +11,23 @@ import {
   Platform,
   KeyboardAvoidingView,
   ActivityIndicator,
-  Pressable, // Keep Pressable if needed elsewhere, but not for date inputs
+  FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
-import { FontAwesome, MaterialIcons } from '@expo/vector-icons'; // For icons
-// REMOVE: import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { FontAwesome, MaterialIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
-import { Image } from 'expo-image'; // Use Expo Image
-import { initializeEvent, uploadImageToSupabase } from '@/utils/functions'; // Import functions
-import { supabase } from '@/utils/supabase'; // Import supabase client
+import { Image } from 'expo-image';
+import { initializeEvent, uploadImageToSupabase } from '@/utils/functions';
+import { supabase } from '@/utils/supabase';
+import MaskInput from 'react-native-mask-input';
 
 // --- Constants ---
 const PREDEFINED_CATEGORIES = [
   'Technology', 'Music', 'Art', 'Business', 'Food & Drink', 'Health', 'Sports', 'Other'
 ];
 
-// --- Helper Function for URL Validation ---
+// --- Helper Functions ---
 const isValidUrl = (url: string) => {
   if (!url) return true; // Allow empty fields
   try {
@@ -43,6 +43,27 @@ const isValidUrl = (url: string) => {
   }
 };
 
+// Date format validation function
+const isValidDateFormat = (dateStr: string): boolean => {
+  // Regex for MM-DD-YYYY format
+  const dateFormatRegex = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])-\d{4}$/;
+  if (!dateFormatRegex.test(dateStr)) return false;
+
+  // Further validate the date is real (e.g., not 02-31-2025)
+  const [month, day, year] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day;
+};
+
+// Time format validation function
+const isValidTimeFormat = (timeStr: string): boolean => {
+  // Regex for HH:MM AM/PM format
+  const timeFormatRegex = /^(0?[1-9]|1[0-2]):([0-5][0-9])\s?(AM|PM|am|pm)$/i;
+  return timeFormatRegex.test(timeStr);
+};
+
 export default function CreateEvent() {
   // --- State Management ---
   const [title, setTitle] = useState('');
@@ -53,11 +74,95 @@ export default function CreateEvent() {
   const [currentTagInput, setCurrentTagInput] = useState('');
   const [maxAttendees, setMaxAttendees] = useState('');
 
-  // --- NEW: Date & Time State as Strings ---
+  // --- Date & Time State with Masks ---
   const [eventDateString, setEventDateString] = useState('');
   const [eventTimeString, setEventTimeString] = useState('');
   const [offerEndDateString, setOfferEndDateString] = useState('');
   const [offerEndTimeString, setOfferEndTimeString] = useState('');
+
+  // Masks for date and time
+  const dateMask = [/\d/, /\d/, '-', /\d/, /\d/, '-', /\d/, /\d/, /\d/, /\d/];
+  const timeMask = [/\d/, /\d/, ':', /\d/, /\d/, ' ', /[AaPp]/, /[Mm]/];
+
+  // --- State for input validation ---
+  const [dateFormatError, setDateFormatError] = useState<string | null>(null);
+  const [timeFormatError, setTimeFormatError] = useState<string | null>(null);
+  const [offerDateFormatError, setOfferDateFormatError] = useState<string | null>(null);
+  const [offerTimeFormatError, setOfferTimeFormatError] = useState<string | null>(null);
+
+  // --- Event Date: validate on change ---
+  const handleEventDateChange = (masked: string, unmasked: string) => {
+    setEventDateString(masked);
+
+    // Clear error if empty (not required at this point)
+    if (!masked.trim()) {
+      setDateFormatError(null);
+      return;
+    }
+
+    // Check format with regex as user types
+    if (masked.length === 10) { // Only validate complete date entries
+      if (!isValidDateFormat(masked)) {
+        setDateFormatError('Please use MM-DD-YYYY format with valid date');
+      } else {
+        setDateFormatError(null);
+      }
+    }
+  };
+
+  // --- Event Time: validate on change ---
+  const handleEventTimeChange = (masked: string, unmasked: string) => {
+    setEventTimeString(masked);
+
+    if (!masked.trim()) {
+      setTimeFormatError(null);
+      return;
+    }
+
+    if (masked.length >= 7) { // Only validate when enough characters for time
+      if (!isValidTimeFormat(masked)) {
+        setTimeFormatError('Please use HH:MM AM/PM format');
+      } else {
+        setTimeFormatError(null);
+      }
+    }
+  };
+
+  // --- Offer Date: validate on change ---
+  const handleOfferDateChange = (masked: string, unmasked: string) => {
+    setOfferEndDateString(masked);
+
+    if (!masked.trim()) {
+      setOfferDateFormatError(null);
+      return;
+    }
+
+    if (masked.length === 10) {
+      if (!isValidDateFormat(masked)) {
+        setOfferDateFormatError('Please use MM-DD-YYYY format with valid date');
+      } else {
+        setOfferDateFormatError(null);
+      }
+    }
+  };
+
+  // --- Offer Time: validate on change ---
+  const handleOfferTimeChange = (masked: string, unmasked: string) => {
+    setOfferEndTimeString(masked);
+
+    if (!masked.trim()) {
+      setOfferTimeFormatError(null);
+      return;
+    }
+
+    if (masked.length >= 7) {
+      if (!isValidTimeFormat(masked)) {
+        setOfferTimeFormatError('Please use HH:MM AM/PM format');
+      } else {
+        setOfferTimeFormatError(null);
+      }
+    }
+  };
 
   // Social Links State
   const [facebookUrl, setFacebookUrl] = useState('');
@@ -71,6 +176,9 @@ export default function CreateEvent() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  const [locationSuggestions, setLocationSuggestions] = useState([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
 
   // --- Permissions ---
   useEffect(() => {
@@ -144,6 +252,46 @@ export default function CreateEvent() {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
+  const handleLocationInputChange = async (text) => {
+    setLocation(text);
+    console.log('Location input:', text);
+
+    if (text.length > 2) {
+      setIsSearchingLocations(true);
+      try {
+        const query = text;
+        const components = "country:IN";
+        const types = "route";
+        const language = "en";
+        const api_key = "AIzaSyCzDpgy-dgQ9aXHcV9iOxZMLPkaioxn46g";
+        const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${api_key}&components=${components}&types=${types}&language=${language}`;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.predictions) {
+          // Limit to 3 suggestions as requested
+          const limitedSuggestions = data.predictions.slice(0, 3);
+          console.log('Location suggestions:', limitedSuggestions);
+          setLocationSuggestions(limitedSuggestions);
+        }
+      } catch (error) {
+        console.error('Error fetching location suggestions:', error);
+      } finally {
+        setIsSearchingLocations(false);
+      }
+    } else {
+      // Clear suggestions if input is too short
+      setLocationSuggestions([]);
+    }
+  };
+
+  const handleLocationSelect = (selectedLocation) => {
+    setLocation(selectedLocation.description);
+    // Clear suggestions after selection
+    setLocationSuggestions([]);
+  };
+
   // Submit Handler
   const handleSubmit = useCallback(async () => {
     // --- Validation ---
@@ -153,7 +301,7 @@ export default function CreateEvent() {
     if (!selectedCategory || selectedCategory === 'Select a Category...') return Alert.alert('Missing Info', 'Please select an event category.');
     if (!selectedImageUri) return Alert.alert('Missing Info', 'Event banner image is required.');
 
-    // --- NEW: Date/Time String Validation ---
+    // --- Date/Time String Validation ---
     if (!eventDateString.trim()) return Alert.alert('Missing Info', 'Event Date is required.');
     if (!eventTimeString.trim()) return Alert.alert('Missing Info', 'Event Time is required.');
     // Optional: Add more specific format validation (e.g., regex) here if needed
@@ -286,7 +434,6 @@ export default function CreateEvent() {
             onPress={pickImage}
             activeOpacity={0.7}
           >
-            {/* ... Banner Image/Placeholder ... */}
             {selectedImageUri ? (
               <Image
                 source={{ uri: selectedImageUri }}
@@ -330,7 +477,6 @@ export default function CreateEvent() {
           {/* Category Picker */}
           <Text style={styles.inputLabel}>Category *</Text>
           <View style={styles.pickerContainer}>
-            {/* ... Picker Code ... */}
             <Picker
               selectedValue={selectedCategory}
               onValueChange={(itemValue, itemIndex) => setSelectedCategory(itemValue)}
@@ -358,7 +504,6 @@ export default function CreateEvent() {
             />
           </View>
           <View style={styles.tagsContainer}>
-            {/* ... Tags display ... */}
             {tags.map((tag, index) => (
               <View key={index} style={styles.tag}>
                 <Text style={styles.tagText}>{tag}</Text>
@@ -368,55 +513,77 @@ export default function CreateEvent() {
               </View>
             ))}
           </View>
-
-          {/* Featured Switch */}
         </View>
 
         {/* --- Form Section 2: Date, Time, Location --- */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>When & Where</Text>
 
-          {/* --- NEW: Event Date Input --- */}
+          {/* Event Date Input with MaskInput */}
           <Text style={styles.inputLabel}>Event Date * (MM-DD-YYYY)</Text>
           <View style={styles.inputContainer}>
-            <TextInput
+            <MaskInput
               style={styles.input}
               value={eventDateString}
-              onChangeText={setEventDateString}
+              onChangeText={handleEventDateChange}
+              mask={dateMask}
               placeholder="MM-DD-YYYY"
               placeholderTextColor="#9CA3AF"
-              keyboardType="numeric" // Helps on mobile, not full validation
-              maxLength={10}
+              keyboardType="numeric"
             />
             <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
           </View>
+          {dateFormatError && <Text style={styles.errorText}>{dateFormatError}</Text>}
 
-          {/* --- NEW: Event Time Input --- */}
+          {/* Event Time Input with MaskInput */}
           <Text style={styles.inputLabel}>Event Time * (HH:MM AM/PM)</Text>
           <View style={styles.inputContainer}>
-            <TextInput
+            <MaskInput
               style={styles.input}
               value={eventTimeString}
-              onChangeText={setEventTimeString}
-              placeholder="e.g., 07:00 PM"
+              onChangeText={handleEventTimeChange}
+              mask={timeMask}
+              placeholder="HH:MM AM"
               placeholderTextColor="#9CA3AF"
-              maxLength={8} // HH:MM AM
-              autoCapitalize="characters" // Helps with AM/PM but user can still type lowercase
+              autoCapitalize="characters"
             />
             <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
           </View>
+          {timeFormatError && <Text style={styles.errorText}>{timeFormatError}</Text>}
 
           {/* Location */}
           <Text style={styles.inputLabel}>Location *</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              onChangeText={setLocation}
+              onChangeText={handleLocationInputChange}
               value={location}
               placeholder="e.g., Grand Hall, City Center"
               placeholderTextColor="#9CA3AF"
             />
+            {isSearchingLocations && (
+              <ActivityIndicator size="small" color="#6366F1" style={styles.locationLoader} />
+            )}
           </View>
+
+          {/* Location Suggestions */}
+          {locationSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={locationSuggestions}
+                keyExtractor={(item) => item.place_id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.suggestionItem}
+                    onPress={() => handleLocationSelect(item)}
+                  >
+                    <Text style={styles.suggestionText}>{item.description}</Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+              />
+            </View>
+          )}
         </View>
 
         {/* --- Form Section 3: Offer Deadline --- */}
@@ -424,35 +591,37 @@ export default function CreateEvent() {
           <Text style={styles.sectionTitle}>Special Offer (Optional)</Text>
           <Text style={[styles.headerSubtitle, { marginBottom: 16 }]}>Set a deadline for early bird pricing or other promotions.</Text>
 
-          {/* --- NEW: Offer End Date Input --- */}
-          <Text style={styles.inputLabel}>Offer Ends On (MM/DD/YYYY)</Text>
+          {/* Offer End Date Input with MaskInput */}
+          <Text style={styles.inputLabel}>Offer Ends On (MM-DD-YYYY)</Text>
           <View style={styles.inputContainer}>
-            <TextInput
+            <MaskInput
               style={styles.input}
               value={offerEndDateString}
-              onChangeText={setOfferEndDateString}
-              placeholder="MM/DD/YYYY"
+              onChangeText={handleOfferDateChange}
+              mask={dateMask}
+              placeholder="MM-DD-YYYY"
               placeholderTextColor="#9CA3AF"
               keyboardType="numeric"
-              maxLength={10}
             />
             <MaterialIcons name="calendar-today" size={20} color="#6B7280" style={styles.pickerIcon} />
           </View>
+          {offerDateFormatError && <Text style={styles.errorText}>{offerDateFormatError}</Text>}
 
-          {/* --- NEW: Offer End Time Input --- */}
+          {/* Offer End Time Input with MaskInput */}
           <Text style={styles.inputLabel}>Offer Ends At (HH:MM AM/PM)</Text>
           <View style={styles.inputContainer}>
-            <TextInput
+            <MaskInput
               style={styles.input}
               value={offerEndTimeString}
-              onChangeText={setOfferEndTimeString}
-              placeholder="e.g., 11:59 PM"
+              onChangeText={handleOfferTimeChange}
+              mask={timeMask}
+              placeholder="HH:MM AM"
               placeholderTextColor="#9CA3AF"
-              maxLength={8}
               autoCapitalize="characters"
             />
             <MaterialIcons name="access-time" size={20} color="#6B7280" style={styles.pickerIcon} />
           </View>
+          {offerTimeFormatError && <Text style={styles.errorText}>{offerTimeFormatError}</Text>}
 
           {/* Max Attendees */}
           <Text style={styles.inputLabel}>Max Attendees (Optional)</Text>
@@ -471,7 +640,6 @@ export default function CreateEvent() {
         {/* --- Form Section 4: Social Links --- */}
         <View style={styles.formSection}>
           <Text style={styles.sectionTitle}>Online Presence (Optional)</Text>
-          {/* ... Social Inputs ... */}
           <Text style={styles.inputLabel}>Facebook URL</Text>
           <View style={styles.inputContainer}>
             <TextInput style={styles.input} onChangeText={setFacebookUrl} value={facebookUrl} placeholder="https://facebook.com/YourPage" placeholderTextColor="#9CA3AF" keyboardType="url" autoCapitalize="none" />
@@ -517,14 +685,11 @@ export default function CreateEvent() {
             )}
           </TouchableOpacity>
         </View>
-
-        {/* REMOVE: DateTimePicker Modal */}
-        {/* {showPicker && ( ... )} */}
-
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
 
 // --- Styles --- (Keep the styles as they were, they should adapt fine)
 const styles = StyleSheet.create({
@@ -550,6 +715,20 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 16,
     color: '#6B7280',
+  },
+  suggestionsContainer: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    marginTop: -16,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 3,
+    zIndex: 1000,
   },
   formSection: {
     backgroundColor: '#FFFFFF',
@@ -727,5 +906,24 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  suggestionItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#111827',
+  },
+  locationLoader: {
+    marginLeft: 8,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 12,
+    marginTop: -12,
+    marginBottom: 12,
   },
 });

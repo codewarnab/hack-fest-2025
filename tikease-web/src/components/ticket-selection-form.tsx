@@ -154,7 +154,7 @@ export default function TicketSelectionForm() {
 
     trackEvent("form_start", {
       formName: "ticket_selection",
-      timestamp: new Date().toISOString(),
+      timestampz: new Date().toISOString(),
     });
 
     // Add field interaction tracking
@@ -162,7 +162,7 @@ export default function TicketSelectionForm() {
       trackEvent("form_field_interaction", {
         formName: "ticket_selection",
         fieldName,
-        timestamp: new Date().toISOString(),
+        timestampz: new Date().toISOString(),
       });
     };
 
@@ -285,9 +285,11 @@ export default function TicketSelectionForm() {
         discount: transactionData.discount ? transactionData.discount.toString() : "0.00",
         promo_code: transactionData.promoCode || null,
         status: status,
-        timestamp: new Date().toISOString()
+        timestampz: new Date().toISOString()
       };
       
+      console.log(transactionRecord);
+
       const { data, error } = await supabaseClient
         .from('transactions')
         .insert(transactionRecord)
