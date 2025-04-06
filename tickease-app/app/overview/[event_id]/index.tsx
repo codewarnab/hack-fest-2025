@@ -9,14 +9,17 @@ import {
   useWindowDimensions,
   Platform,
   Alert,
+  Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { getTotalTicketBought } from '@/utils/getevent';
 import { getTotalRevenue } from '@/utils/getevent';
 import { getEventById } from '@/utils/getevent';
+import { useEventUserCount } from '@/utils/getlive';
+
 // --- Dummy Data ---
 // Enhanced dummy data for a richer overview
 const dummyEventData = {
@@ -57,7 +60,7 @@ const InsightBlock = ({ iconName, value, label, iconColor = '#64748B' }: {
   iconColor?: string;
 }) => (
   <View style={styles.insightBlock}>
-    <Ionicons name={iconName} size={20} color={iconColor} style={styles.insightIcon} />
+     
     <View>
       <Text style={styles.insightValue}>{value}</Text>
       <Text style={styles.insightLabel}>{label}</Text>
@@ -112,6 +115,48 @@ const TicketTypeBreakdownChart = ({ data }: { data: typeof dummyEventData.ticket
   );
 };
 
+// Live Users Badge: Shows real-time user count with pulsing animation
+const LiveUsersBadge = ({ count }: { count: number }) => {
+  // Create animated value for pulse effect
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  
+  // Set up pulse animation
+  React.useEffect(() => {
+    const pulse = Animated.sequence([
+      Animated.timing(pulseAnim, { 
+        toValue: 1.08, 
+        duration: 800, 
+        useNativeDriver: true 
+      }),
+      Animated.timing(pulseAnim, { 
+        toValue: 1, 
+        duration: 800, 
+        useNativeDriver: true 
+      })
+    ]);
+    
+    // Create infinite loop
+    Animated.loop(pulse).start();
+    
+    return () => pulseAnim.stopAnimation();
+  }, []);
+  
+  return (
+    <View style={styles.liveUsersBadgeContainer}>
+      <View style={styles.liveUsersBadge}>
+        <Animated.View 
+          style={[
+            styles.pulsingDot,
+            { transform: [{ scale: pulseAnim }] }
+          ]} 
+        />
+        <Ionicons name="people" size={16} color="#FFFFFF" style={styles.liveUsersIcon} />
+        <Text style={styles.liveUsersText}>{count} Online</Text>
+      </View>
+    </View>
+  );
+};
+
 // --- Main Component ---
 
 const EventOverviewPage = () => {
@@ -124,6 +169,9 @@ const EventOverviewPage = () => {
   const [totalRevenue, setTotalRevenue] = useState<number>(0);
   const [eventData, setEventData] = useState(dummyEventData);
   const [loading, setLoading] = useState(true);
+  
+  // Get live user count from getlive.ts 
+  const liveUserCount = useEventUserCount(eventId);
   
   useEffect(() => {
     const fetchEventData = async () => {
@@ -219,6 +267,11 @@ const EventOverviewPage = () => {
                  <Ionicons name="arrow-back" size={24} color="#1E293B" />
             </View>
           </TouchableOpacity>
+          
+          {/* Add Live User Count Badge to banner */}
+          {liveUserCount > 0 && (
+            <LiveUsersBadge count={liveUserCount} />
+          )}
         </View>
 
         {/* Main Content Area */}
@@ -248,14 +301,19 @@ const EventOverviewPage = () => {
             </View>
           </View>
 
-          {/* At a Glance Section */}
+          {/* At a Glance Section - Add live user count in the At a Glance section */}
           <View style={[styles.card, styles.quickGlanceCard]}>
               <SectionHeader title="At a Glance" />
               <View style={styles.insightsGrid}>
                 <InsightBlock iconName="ticket-outline" value={totalTicketsSold} label="Tickets Sold" iconColor="#3b82f6"/>
-                 <InsightBlock iconName="people-outline" value={eventData.attendeesRegistered} label="Registered" iconColor="#a855f7"/>
+                <InsightBlock iconName="people-outline" value={eventData.attendeesRegistered} label="Registered" iconColor="#a855f7"/>
                 <InsightBlock iconName="cash-outline" value={formatCurrency(totalRevenue)} label="Est. Revenue" iconColor="#10b981"/>
-                 <InsightBlock iconName="log-in-outline" value={`${eventData.checkIns} / ${eventData.attendeesRegistered}`} label="Checked In" iconColor="#f59e0b"/>
+                <InsightBlock 
+                  iconName="pulse-outline" 
+                  value={liveUserCount} 
+                  label="Live Now" 
+                  iconColor="#ff4757"
+                />
               </View>
            </View>
 
@@ -700,6 +758,41 @@ const styles = StyleSheet.create({
         marginLeft: 6,
         fontSize: 14,
         fontWeight: '500',
+    },
+    // Live Users Badge styles
+    liveUsersBadgeContainer: {
+      position: 'absolute',
+      top: 70,
+      right: 15,
+      zIndex: 10,
+    },
+    liveUsersBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(33, 33, 33, 0.8)',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 3,
+      elevation: 5,
+    },
+    pulsingDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: '#ff4757',
+      marginRight: 6,
+    },
+    liveUsersIcon: {
+      marginRight: 4,
+    },
+    liveUsersText: {
+      color: '#FFFFFF',
+      fontWeight: '600',
+      fontSize: 13,
     },
 });
 

@@ -49,6 +49,7 @@
     "expo-symbols": "^0.2.2",
     "expo-system-ui": "~4.0.8",
     "expo-web-browser": "~14.0.2",
+    "firebase": "^11.6.0",
     "invariant": "^2.2.4",
     "moti": "^0.30.0",
     "react": "18.3.1",
