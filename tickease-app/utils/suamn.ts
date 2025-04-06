@@ -2,11 +2,14 @@ import { supabase } from "@/utils/supabase";
 
 // Define a more specific type based on your table structure
 export interface Escalation {
+  id?: string;
   user_name?: string;
   user_contact?: string;
   issue_summary?: string;
   priority?: string;
   Created_at?: string;
+  read?: boolean;
+  event_id?: string;
 }
 
 export const getEscalationsForUser = async (): Promise<Escalation[] | null> => {

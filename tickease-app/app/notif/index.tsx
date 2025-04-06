@@ -28,7 +28,8 @@ export default function NotificationComponent() {
             }
 
             // Fetch escalations
-            const escalationsData = await getEscalationsForUser(userId);
+            const escalationsData = await getEscalationsForUser();
+            console.log('Fetched escalations:', escalationsData);
 
             if (escalationsData) {
                 // Transform escalations into notification format
@@ -38,7 +39,7 @@ export default function NotificationComponent() {
                     message: escalation.issue_summary || 'A new issue has been escalated.',
                     time: escalation.Created_at ? new Date(escalation.Created_at).toLocaleString() : 'Recently',
                     type: mapPriorityToType(escalation.priority),
-                    read: false,
+                    read: escalation.read || false, // Use read status from database, default to false if not present
                     originalData: escalation
                 })).reverse();
 
@@ -79,7 +80,7 @@ export default function NotificationComponent() {
                     event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
                     schema: 'public',
                     table: 'escalations',
-                    filter: `user_id=eq.${userId}` // Filter for the current user's escalations
+                    filter: `event_id.user_id=eq.${userId}` // Filter for the current user's escalations
                 }, handleRealtimeEvent)
                 .subscribe((status) => {
                     console.log('Realtime subscription status:', status);
@@ -194,14 +195,72 @@ export default function NotificationComponent() {
 
     const unreadCount = notifications.filter(notification => !notification.read).length;
 
-    const markAsRead = (id) => {
-        setNotifications(notifications.map(notification =>
-            notification.id === id ? { ...notification, read: true } : notification
-        ));
+    const markAsRead = async (id) => {
+        try {
+            // Find the notification to get the original escalation ID
+            const notification = notifications.find(n => n.id === id);
+            if (!notification || !notification.originalData?.id) {
+                // If no original data, just update UI state
+                setNotifications(notifications.map(n =>
+                    n.id === id ? { ...n, read: true } : n
+                ));
+                return;
+            }
+
+            // Get the escalation ID from the notification's original data
+            const escalationId = notification.originalData.id;
+
+            // Update the read status in the database
+            const { error } = await supabase
+                .from('escalations')
+                .update({ read: true })
+                .eq('id', escalationId);
+
+            if (error) {
+                console.error('Error updating read status:', error);
+                // Continue with UI update even if database update fails
+            }
+
+            // Update the local state
+            setNotifications(notifications.map(n =>
+                n.id === id ? { ...n, read: true } : n
+            ));
+        } catch (err) {
+            console.error('Error in markAsRead:', err);
+            // Update local state regardless of error
+            setNotifications(notifications.map(n =>
+                n.id === id ? { ...n, read: true } : n
+            ));
+        }
     };
 
-    const markAllAsRead = () => {
-        setNotifications(notifications.map(notification => ({ ...notification, read: true })));
+    const markAllAsRead = async () => {
+        try {
+            // Get all unread notification IDs that have database records
+            const unreadEscalationIds = notifications
+                .filter(n => !n.read && n.originalData?.id)
+                .map(n => n.originalData.id);
+
+            if (unreadEscalationIds.length > 0) {
+                // Update all unread escalations to read=true in the database
+                const { error } = await supabase
+                    .from('escalations')
+                    .update({ read: true })
+                    .in('id', unreadEscalationIds);
+
+                if (error) {
+                    console.error('Error updating all read statuses:', error);
+                    // Continue with UI update even if database update fails
+                }
+            }
+
+            // Update all in the local state
+            setNotifications(notifications.map(notification => ({ ...notification, read: true })));
+        } catch (err) {
+            console.error('Error in markAllAsRead:', err);
+            // Update local state regardless of error
+            setNotifications(notifications.map(notification => ({ ...notification, read: true })));
+        }
     };
 
     const deleteEscalation = async (notificationId, escalationId) => {
