@@ -11,7 +11,7 @@ import FillLine from '@/components/FillLine';
 import StatCard from '@/components/StatCard';
 import { MaterialIcons } from '@expo/vector-icons';
 export default function AnalyticsPage() {
-  const [timeframe, setTimeframe] = useState('day');
+  const [timeframe, setTimeframe] = useState<'day' | 'month'>('day');
   // Dummy data for age group statistics
   const ageGroupData = [
     { name: 'VIP', value: 15, color: '#4169E1' },

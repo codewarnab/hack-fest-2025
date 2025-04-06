@@ -44,7 +44,7 @@ export default function MyEvents() {
     router.push("/landing_form");
   };
 
-  const EventItem = ({ event }) => (
+  const EventItem = ({ event } : any ) => (
     <TouchableOpacity
       style={styles.eventCard}
       onPress={() => router.push(`/overview/${event.id}`)}
