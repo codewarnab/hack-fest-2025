@@ -13,7 +13,7 @@ import { cookies } from "next/headers";
  *    - Parse and validate the event date.
  *    - Retrieve all tickets associated with the event.
  * 4. For each ticket:
- *    - Calculate the sale period from ticket creation to event date.
+ *    - Calculate the sale period from event creation to event date.
  *    - Determine elapsed days since sale start.
  *    - Fetch completed sales transactions.
  *    - Compute the expected vs. actual sales rate to derive a demand factor.
