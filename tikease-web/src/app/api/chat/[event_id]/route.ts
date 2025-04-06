@@ -6,39 +6,48 @@ import { createClient } from "../../../../../utils/supabase/server";
 export const maxDuration = 30;
 import { cookies } from "next/headers";
 
-const event_details = `
-EVENT DETAILS:
-- Name: Tech Conference 2025
-- Dates: May 15-17, 2025
-- Location: San Francisco Convention Center, 123 Tech Blvd, San Francisco, CA 94103
-- Website: techconference2025.com
+// Create a simple in-memory cache to store event data
+// In a production app, you might want to use a more robust caching solution
+type EventCache = {
+  [eventId: string]: {
+    data: any;
+    timestamp: number;
+  }
+};
 
-TICKET TYPES & PRICES:
-- Early Bird: $299 (Limited availability)
-- Regular: $399 (Standard admission)
-- VIP: $699 (Premium experience with priority seating and exclusive events)
+// Cache will expire after 10 minutes (600000 ms)
+const CACHE_EXPIRY = 600000;
+const eventCache: EventCache = {};
 
-ADD-ONS & PRICES:
-- Workshop Access: $99
-- Networking Event: $49
-- Event Merchandise: $39
-- VIP Lounge Access: $149 (Requires VIP Ticket)
-- Session Recordings: $29
-- Private Session: $199
-
-SPEAKERS (Partial List):
-- Jane Smith - CEO of TechGiant (Keynote)
-- John Doe - AI Researcher (Talk: Deep Dive into AI Ethics)
-- Sarah Johnson - Blockchain Expert (Talk: Blockchain Beyond Crypto)
-- Michael Chen - UX Design Lead (Talk: Designing for Delight: Modern UX)
-
-FREQUENTLY ASKED QUESTIONS:
-- Refund Policy: Full refunds available up to 30 days before the event, 50% refund up to 14 days before.
-- Dress Code: Business casual
-- Wi-Fi: Complimentary high-speed Wi-Fi available throughout the venue
-- Parking: Available at the convention center for $25/day
-- Accessibility: The venue is fully accessible with ramps, elevators, and accessible restrooms
-`;
+// Function to get event data with caching
+async function getEventData(supabase: any, eventId: string) {
+  // Check if we have a valid cached version
+  const cachedEvent = eventCache[eventId];
+  const now = Date.now();
+  
+  if (cachedEvent && (now - cachedEvent.timestamp < CACHE_EXPIRY)) {
+    console.log("Using cached event data for:", eventId);
+    return { data: cachedEvent.data, error: null, cached: true };
+  }
+  
+  // No valid cache found, fetch from database
+  console.log("Fetching fresh event data for:", eventId);
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("id", eventId)
+    .single();
+    
+  // Cache the result if successful
+  if (!error && data) {
+    eventCache[eventId] = {
+      data,
+      timestamp: now
+    };
+  }
+  
+  return { data, error, cached: false };
+}
 
 export async function POST(
   req: NextRequest,
@@ -53,6 +62,17 @@ export async function POST(
     const { messages } = await req.json();
     const cookieStore = cookies();
     const supabase = createClient(cookieStore);
+
+    // Use the cached version of event data if available
+    const { data: eventData, error, cached } = await getEventData(supabase, currentEventId);
+    
+    // Log the data source and content
+    console.log(`Event Data (${cached ? 'cached' : 'fresh'}):`);
+    console.log("Event Data 111:", eventData);
+    
+    if (error) {
+      console.error("Error fetching event data:", error);
+    }
 
     // 1. Escalate Issue Tool (Enhanced)
     const escalateToManager = tool({
@@ -260,7 +280,7 @@ export async function POST(
       },
       maxSteps: 5,
       system: `
-YOU ARE A PROFESSIONAL, EMPATHETIC, AND EFFICIENT AI EVENT ASSISTANT FOR TECH CONFERENCE 2025. YOUR PRIMARY ROLE IS TO PROVIDE ACCURATE INFORMATION AND ASSISTANCE BASED *SOLELY* ON THE PROVIDED EVENT DETAILS AND YOUR AVAILABLE TOOLS. MAINTAIN A FRIENDLY AND HELPFUL TONE IN SHORT CONCISE AND TO THE POINT MANNER .
+YOU ARE A PROFESSIONAL, EMPATHETIC, AND EFFICIENT AI EVENT ASSISTANT . YOUR PRIMARY ROLE IS TO PROVIDE ACCURATE INFORMATION AND ASSISTANCE BASED *SOLELY* ON THE PROVIDED EVENT DETAILS AND YOUR AVAILABLE TOOLS. MAINTAIN A FRIENDLY AND HELPFUL TONE IN SHORT CONCISE AND TO THE POINT MANNER .
 
 **MARKDOWN FORMATTING FOR HIGHLIGHTING:**
 *   Use **bold markdown (\`**text**\`)** to highlight key details such as:
@@ -274,8 +294,8 @@ YOU ARE A PROFESSIONAL, EMPATHETIC, AND EFFICIENT AI EVENT ASSISTANT FOR TECH CO
 *   Do NOT overuse bolding.
 
 **EVENT DETAILS:**
-${event_details}
-
+${JSON.stringify(eventData || {})}
+** USE THIS eventData for every primary query of the user  **
 **YOUR AVAILABLE TOOLS:**
 *   **checkTicketAvailability(ticketType)**: Checks current stock for 'Early Bird', 'Regular', or 'VIP' tickets.
 *   **getSessionDetails(sessionQuery)**: Retrieves speaker, time, and room details for a specific session.
