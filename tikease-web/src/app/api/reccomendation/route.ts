@@ -2,6 +2,27 @@ import { NextResponse } from "next/server";
 import { createClient } from "../../../../utils/supabase/server";
 import { cookies } from "next/headers";
 
+
+/**
+ * This API endpoint processes ticket pricing recommendations for events.
+ * 
+ * Steps:
+ * 1. Connect to Supabase using cookies.
+ * 2. Retrieve all events from the "events" table.
+ * 3. For each event:
+ *    - Parse and validate the event date.
+ *    - Retrieve all tickets associated with the event.
+ * 4. For each ticket:
+ *    - Calculate the sale period from ticket creation to event date.
+ *    - Determine elapsed days since sale start.
+ *    - Fetch completed sales transactions.
+ *    - Compute the expected vs. actual sales rate to derive a demand factor.
+ *    - If the demand factor is too high or too low:
+ *       - Compute a price increase or decrease recommendation (up to 50% adjustment).
+ *       - Insert an escalation record with the recommendation.
+ * 5. Respond with a success message upon completion.
+ */
+
 function daysBetween(start: Date, end: Date) {
     const msPerDay = 1000 * 60 * 60 * 24;
     return Math.floor((end.getTime() - start.getTime()) / msPerDay);
