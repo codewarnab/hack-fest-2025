@@ -178,4 +178,4 @@ The platform provides rich data visualization through:
 
 ---
 
-*Crafted with ❤️ by Team Innovation X for HackFest 2025*
+*Crafted with ❤️ by Team Innovisionaries  for HackFest 2025*
