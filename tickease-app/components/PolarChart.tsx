@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Svg, Circle, G, Path } from 'react-native-svg';
+import { VictoryPolarAxis, VictoryBar } from 'victory-native';
 
 export default function PolarChart({ data, userCount }) {
   const radius = 90;
@@ -44,6 +45,24 @@ export default function PolarChart({ data, userCount }) {
         </View>
       </View>
       
+      <VictoryPolarAxis
+        style={{
+          axis: { stroke: "#e0e0e0" },
+          grid: { stroke: "#e0e0e0" },
+          tickLabels: { fill: "#333", fontSize: 12 },
+        }}
+      />
+      <VictoryBar
+        style={{
+          data: {
+            fill: ({ datum }) => datum.color || '#4169E1',
+          },
+          parent: {
+            backgroundColor: '#f5f6fa'
+          }
+        }}
+      />
+
       <View style={styles.legendContainer}>
         {data.map((item, index) => (
           <View key={index} style={styles.legendItem}>
@@ -60,6 +79,9 @@ export default function PolarChart({ data, userCount }) {
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: '#f5f6fa',
+    padding: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 10,
@@ -111,4 +133,10 @@ const styles = StyleSheet.create({
     color: '#555',
     fontWeight: '500',
   },
+  totalUsers: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#666',
+    marginTop: 10,
+  }
 });
