@@ -16,6 +16,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { getTotalTicketBought } from '@/utils/getevent';
 import { getTotalRevenue } from '@/utils/getevent';
+import { getEventById } from '@/utils/getevent';
 // --- Dummy Data ---
 // Enhanced dummy data for a richer overview
 const dummyEventData = {
@@ -121,32 +122,49 @@ const EventOverviewPage = () => {
   const eventId = params.event_id || dummyEventData.id;
   const [totalTicketsSold, setTotalTicketsSold] = useState<number>(0);
   const [totalRevenue, setTotalRevenue] = useState<number>(0);
-  const eventData = dummyEventData; // Use dummy data
+  const [eventData, setEventData] = useState(dummyEventData);
+  const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const fetchTickets = async () => {
+    const fetchEventData = async () => {
       try {
+        setLoading(true);
+        
+        // Fetch event details
+        const eventDetails = await getEventById(eventId);
+        
+        if (eventDetails) {
+          // Update event data with real data where available
+          setEventData(prev => ({
+            ...prev,
+            name: eventDetails.title || prev.name,
+            tagline: eventDetails.description?.substring(0, 50) + '...' || prev.tagline,
+            bannerImage: eventDetails.image || prev.bannerImage,
+            location: eventDetails.venue || prev.location,
+            date: eventDetails.eventDate || prev.date,
+            time: eventDetails.eventTime || prev.time,
+            tags: eventDetails.tags || [],
+            // Keep other dummy data for UI richness
+          }));
+        }
+
+        // Fetch ticket sales data
         const tickets = await getTotalTicketBought(eventId);
         setTotalTicketsSold(tickets || 0);
-      } catch (error) {
-        console.error("Error fetching tickets:", error);
-        setTotalTicketsSold(0);
-      }
-    };
-    
-    const fetchRevenue = async () => {
-      try {
+        
+        // Fetch revenue data
         const revenue = await getTotalRevenue(eventId);
         setTotalRevenue(revenue || 0);
       } catch (error) {
-        console.error("Error fetching revenue:", error);
-        setTotalRevenue(0);
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
       }
     };
     
-    fetchTickets();
-    fetchRevenue();
+    fetchEventData();
   }, [eventId]);
+  
   const eventName = eventData.name || 'Event Overview';
 
   const formatCurrency = (amount: number): string => {
