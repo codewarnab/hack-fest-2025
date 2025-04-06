@@ -12,6 +12,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import EventStorage from "@/components/event-storage";
 import ChatbotButton from "@/components/chatbot-button";
+import UserActivityTracker from "@/components/user-activity-tracker";
 
 // Define categories array similar to event-categories.tsx
 const categories = [
@@ -59,7 +60,7 @@ async function getEvent(id: string) {
 export default async function EventPage({ params }: { params: { id: string } }) {
   const { id } = await params; // Await params to resolve the issue
   const event = await getEvent(id);
-
+  
   if (!event) {
     notFound();
   }
@@ -103,6 +104,8 @@ export default async function EventPage({ params }: { params: { id: string } }) 
 
   return (
     <>
+
+
     <SiteHeader />
     {/* Include the EventStorage component to save event ID to localStorage */}
     <EventStorage eventId={id} />
@@ -191,6 +194,7 @@ export default async function EventPage({ params }: { params: { id: string } }) 
       </div>
     </div>
     <ChatbotButton />
+    <UserActivityTracker eventId={id} />
     </>
   );
 }
