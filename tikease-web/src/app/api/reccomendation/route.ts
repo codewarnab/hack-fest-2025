@@ -105,13 +105,13 @@ export async function GET(request: Request) {
                 // 
                 const summary = `Ticket type '${ticket.ticket_type}' for event '${event.title}' requires a pricing adjustment. ${recommendation}`
                 const { error: escalationError } = await supabase.from("escalation").insert([
-                        {
-                            eventId: eventId,
-                            ticketId: ticket.id,
-                            recommendation: recommendation,
-                            reccomandationPrice: reccomandationPrice,
-                            summary: summary,
-                        }
+                    {
+                        eventId: eventId,
+                        ticketId: ticket.id,
+                        issue_summary: recommendation,
+                        prioriy: "recommendation",
+                        
+                    }
                 ])
                 if (escalationError) {
                     console.error(`Error inserting escalation for event ${eventId}: ${escalationError.message}`);

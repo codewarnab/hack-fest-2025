@@ -10,9 +10,15 @@ export default function NotificationComponent() {
     const [notifications, setNotifications] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     // Reference to store the subscription
     const subscriptionRef = useRef(null);
+
+    // Recalculate unread count whenever notifications change
+    useEffect(() => {
+        setUnreadCount(notifications.filter(notification => !notification.read).length);
+    }, [notifications]);
 
     const fetchEscalations = async () => {
         setIsLoading(true);
@@ -29,19 +35,31 @@ export default function NotificationComponent() {
 
             // Fetch escalations
             const escalationsData = await getEscalationsForUser();
-            console.log('Fetched escalations:', escalationsData);
 
             if (escalationsData) {
                 // Transform escalations into notification format
-                const notificationsData = escalationsData.map((escalation, index) => ({
-                    id: escalation.id || index + 1,
-                    title: `Escalation: ${escalation.priority || 'New'} Priority`,
-                    message: escalation.issue_summary || 'A new issue has been escalated.',
-                    time: escalation.Created_at ? new Date(escalation.Created_at).toLocaleString() : 'Recently',
-                    type: mapPriorityToType(escalation.priority),
-                    read: escalation.read || false, // Use read status from database, default to false if not present
-                    originalData: escalation
-                })).reverse();
+                const notificationsData = escalationsData.map((escalation, index) => {
+                    // Find existing notification to preserve read status
+                    const existingNotification = notifications.find(n => n.originalData?.id === escalation.id);
+
+                    // Set appropriate title based on priority/type
+                    let title;
+                    if (escalation.priority?.toLowerCase() === 'recommendation') {
+                        title = `Recommendation`;
+                    } else {
+                        title = `Escalation: ${escalation.priority || 'New'} Priority`;
+                    }
+
+                    return {
+                        id: escalation.id || index + 1,
+                        title: title,
+                        message: escalation.issue_summary || 'A new issue has been escalated.',
+                        time: escalation.Created_at ? new Date(escalation.Created_at).toLocaleString() : 'Recently',
+                        type: mapPriorityToType(escalation.priority),
+                        read: existingNotification ? existingNotification.read : false, // Preserve read status
+                        originalData: escalation
+                    };
+                }).reverse();
 
                 setNotifications(notificationsData);
             } else {
@@ -80,7 +98,7 @@ export default function NotificationComponent() {
                     event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
                     schema: 'public',
                     table: 'escalations',
-                    filter: `event_id.user_id=eq.${userId}` // Filter for the current user's escalations
+                    filter: `user_id=eq.${userId}` // Filter for the current user's escalations
                 }, handleRealtimeEvent)
                 .subscribe((status) => {
                     console.log('Realtime subscription status:', status);
@@ -104,9 +122,17 @@ export default function NotificationComponent() {
             case 'INSERT':
                 // Add new notification
                 if (newRecord) {
+                    // Set appropriate title based on priority/type
+                    let title;
+                    if (newRecord.priority?.toLowerCase() === 'recommendation') {
+                        title = `Recommendation`;
+                    } else {
+                        title = `Escalation: ${newRecord.priority || 'New'} Priority`;
+                    }
+
                     const newNotification = {
                         id: newRecord.id,
-                        title: `Escalation: ${newRecord.priority || 'New'} Priority`,
+                        title: title,
                         message: newRecord.issue_summary || 'A new issue has been escalated.',
                         time: newRecord.Created_at ? new Date(newRecord.Created_at).toLocaleString() : 'Recently',
                         type: mapPriorityToType(newRecord.priority),
@@ -129,18 +155,27 @@ export default function NotificationComponent() {
                 // Update existing notification
                 if (newRecord) {
                     setNotifications(current =>
-                        current.map(notification =>
-                            notification.originalData?.id === newRecord.id
-                                ? {
+                        current.map(notification => {
+                            if (notification.originalData?.id === newRecord.id) {
+                                // Set appropriate title based on priority/type
+                                let title;
+                                if (newRecord.priority?.toLowerCase() === 'recommendation') {
+                                    title = `Recommendation`;
+                                } else {
+                                    title = `Escalation: ${newRecord.priority || 'New'} Priority`;
+                                }
+
+                                return {
                                     ...notification,
-                                    title: `Escalation: ${newRecord.priority || 'New'} Priority`,
+                                    title: title,
                                     message: newRecord.issue_summary || 'An issue has been escalated.',
                                     type: mapPriorityToType(newRecord.priority),
                                     originalData: newRecord,
                                     updated: true // Mark as updated to potentially highlight it
-                                }
-                                : notification
-                        )
+                                };
+                            }
+                            return notification;
+                        })
                     );
                 }
                 break;
@@ -168,6 +203,8 @@ export default function NotificationComponent() {
                 return 'opportunity';
             case 'low':
                 return 'suggestion';
+            case 'recommendation':
+                return 'recommendation';
             default:
                 return 'info';
         }
@@ -193,74 +230,18 @@ export default function NotificationComponent() {
         }
     }, [showNotifications]);
 
-    const unreadCount = notifications.filter(notification => !notification.read).length;
-
-    const markAsRead = async (id) => {
-        try {
-            // Find the notification to get the original escalation ID
-            const notification = notifications.find(n => n.id === id);
-            if (!notification || !notification.originalData?.id) {
-                // If no original data, just update UI state
-                setNotifications(notifications.map(n =>
-                    n.id === id ? { ...n, read: true } : n
-                ));
-                return;
-            }
-
-            // Get the escalation ID from the notification's original data
-            const escalationId = notification.originalData.id;
-
-            // Update the read status in the database
-            const { error } = await supabase
-                .from('escalations')
-                .update({ read: true })
-                .eq('id', escalationId);
-
-            if (error) {
-                console.error('Error updating read status:', error);
-                // Continue with UI update even if database update fails
-            }
-
-            // Update the local state
-            setNotifications(notifications.map(n =>
-                n.id === id ? { ...n, read: true } : n
-            ));
-        } catch (err) {
-            console.error('Error in markAsRead:', err);
-            // Update local state regardless of error
-            setNotifications(notifications.map(n =>
-                n.id === id ? { ...n, read: true } : n
-            ));
-        }
+    const markAsRead = (id) => {
+        setNotifications(prevNotifications =>
+            prevNotifications.map(notification =>
+                notification.id === id ? { ...notification, read: true } : notification
+            )
+        );
     };
 
-    const markAllAsRead = async () => {
-        try {
-            // Get all unread notification IDs that have database records
-            const unreadEscalationIds = notifications
-                .filter(n => !n.read && n.originalData?.id)
-                .map(n => n.originalData.id);
-
-            if (unreadEscalationIds.length > 0) {
-                // Update all unread escalations to read=true in the database
-                const { error } = await supabase
-                    .from('escalations')
-                    .update({ read: true })
-                    .in('id', unreadEscalationIds);
-
-                if (error) {
-                    console.error('Error updating all read statuses:', error);
-                    // Continue with UI update even if database update fails
-                }
-            }
-
-            // Update all in the local state
-            setNotifications(notifications.map(notification => ({ ...notification, read: true })));
-        } catch (err) {
-            console.error('Error in markAllAsRead:', err);
-            // Update local state regardless of error
-            setNotifications(notifications.map(notification => ({ ...notification, read: true })));
-        }
+    const markAllAsRead = () => {
+        setNotifications(prevNotifications =>
+            prevNotifications.map(notification => ({ ...notification, read: true }))
+        );
     };
 
     const deleteEscalation = async (notificationId, escalationId) => {
@@ -306,7 +287,9 @@ export default function NotificationComponent() {
     };
 
     const deleteNotification = (id) => {
-        setNotifications(notifications.filter(notification => notification.id !== id));
+        setNotifications(prevNotifications =>
+            prevNotifications.filter(notification => notification.id !== id)
+        );
     };
 
     const handleNotificationAction = (notification) => {
@@ -344,6 +327,16 @@ export default function NotificationComponent() {
                     ]
                 );
                 break;
+            case 'recommendation':
+                Alert.alert(
+                    'Admin Recommendation',
+                    `This is a recommendation for administrators: ${notification.message}`,
+                    [
+                        { text: 'Dismiss', style: 'cancel' },
+                        { text: 'Review', onPress: () => Alert.alert('Success', 'Recommendation is being reviewed!') }
+                    ]
+                );
+                break;
             default:
                 // Just mark as read for info
                 break;
@@ -356,6 +349,7 @@ export default function NotificationComponent() {
             case 'info': return 'information-circle';
             case 'opportunity': return 'star';
             case 'alert': return 'warning';
+            case 'recommendation': return 'ribbon';
             default: return 'notifications';
         }
     };
@@ -366,6 +360,7 @@ export default function NotificationComponent() {
             case 'info': return '#3B82F6';
             case 'opportunity': return '#F59E0B';
             case 'alert': return '#EF4444';
+            case 'recommendation': return '#8B5CF6';
             default: return '#6366F1';
         }
     };
@@ -450,20 +445,27 @@ export default function NotificationComponent() {
                                         style={[
                                             styles.notificationItem,
                                             !notification.read && styles.unreadNotification,
-                                            notification.isNew && styles.newNotification // Highlight new notifications
+                                            notification.isNew && styles.newNotification, // Highlight new notifications
+                                            notification.type === 'recommendation' && styles.recommendationNotification // Special styling for recommendations
                                         ]}
                                         onPress={() => handleNotificationAction(notification)}
                                     >
-                                        <View style={styles.notificationIconContainer}>
+                                        <View style={[
+                                            styles.notificationIconContainer,
+                                            notification.type === 'recommendation' && styles.recommendationIconContainer
+                                        ]}>
                                             <Ionicons
                                                 name={getIconName(notification.type)}
                                                 size={24}
-                                                color={getIconColor(notification.type)}
+                                                color={notification.type === 'recommendation' ? '#FFFFFF' : getIconColor(notification.type)}
                                             />
                                         </View>
                                         <View style={styles.notificationContent}>
                                             <View style={styles.notificationHeader}>
-                                                <Text style={styles.notificationTitle}>
+                                                <Text style={[
+                                                    styles.notificationTitle,
+                                                    notification.type === 'recommendation' && styles.recommendationTitle
+                                                ]}>
                                                     {notification.title}
                                                     {notification.isNew && (
                                                         <Text style={styles.newBadge}> New</Text>
@@ -492,7 +494,12 @@ export default function NotificationComponent() {
                                                     <Ionicons name="trash-outline" size={16} color="#888" />
                                                 </TouchableOpacity>
                                             </View>
-                                            <Text style={styles.notificationMessage}>{notification.message}</Text>
+                                            <Text style={[
+                                                styles.notificationMessage,
+                                                notification.type === 'recommendation' && styles.recommendationMessage
+                                            ]}>
+                                                {notification.message}
+                                            </Text>
                                             <Text style={styles.notificationTime}>{notification.time}</Text>
                                         </View>
                                     </TouchableOpacity>
@@ -602,6 +609,11 @@ const styles = StyleSheet.create({
         borderLeftWidth: 3,
         borderLeftColor: '#3B82F6',
     },
+    recommendationNotification: {
+        backgroundColor: '#F5F0FF', // Light purple background for recommendations
+        borderLeftWidth: 3,
+        borderLeftColor: '#8B5CF6',
+    },
     notificationIconContainer: {
         width: 40,
         height: 40,
@@ -610,6 +622,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 12,
+    },
+    recommendationIconContainer: {
+        backgroundColor: '#8B5CF6',
+        shadowColor: '#8B5CF6',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.6,
+        shadowRadius: 8,
+        elevation: 6,
     },
     notificationContent: {
         flex: 1,
@@ -625,6 +645,9 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: '#333',
     },
+    recommendationTitle: {
+        color: '#7C3AED',
+    },
     newBadge: {
         color: '#3B82F6',
         fontWeight: 'bold',
@@ -637,6 +660,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         marginBottom: 8,
+    },
+    recommendationMessage: {
+        color: '#6D28D9',
     },
     notificationTime: {
         fontSize: 12,
