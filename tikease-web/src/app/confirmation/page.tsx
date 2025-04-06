@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
-import { CheckCircle, Download, Calendar, Share2 } from "lucide-react"
+import { CheckCircle, Download, Calendar, Share2, Mail } from "lucide-react"
 import ChatbotButton from "@/components/chatbot-button"
 import { clearRegistrationProgress } from "@/lib/cookies"
 import { formatDate, formatCurrency } from "@/lib/utils"
@@ -34,6 +34,8 @@ export default function ConfirmationPage() {
   const [registrationData, setRegistrationData] = useState<RegistrationData | null>(null)
   const [showFeedbackSurvey, setShowFeedbackSurvey] = useState(false)
   const [isAddingToCalendar, setIsAddingToCalendar] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
 
   useEffect(() => {
     // Retrieve data from session storage
@@ -129,6 +131,226 @@ export default function ConfirmationPage() {
       alert("Sharing is not supported on this browser. Copy the URL to share manually.")
     }
   }
+
+  const generateEmailTicket = () => {
+    // Generate HTML for email ticket
+    const formattedAddons = ticketData.addons && ticketData.addons.length > 0 
+      ? `<div style="margin-top: 15px;">
+          <p style="color: #6b7280; font-size: 14px; margin-bottom: 5px;">Add-ons:</p>
+          <ul style="margin: 0; padding-left: 20px;">
+            ${ticketData.addons.map(addon => `<li style="font-weight: 500;">${formatAddonName(addon)}</li>`).join('')}
+          </ul>
+        </div>` 
+      : '';
+
+    const discountSection = ticketData.discount > 0
+      ? `<div style="display: flex; justify-content: space-between; color: #16a34a; margin-bottom: 10px;">
+          <p style="margin: 0; font-size: 14px;">Discount:</p>
+          <p style="margin: 0; font-weight: 500;">-${formatCurrency(ticketData.discount)}</p>
+        </div>`
+      : '';
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Your Tech Conference 2025 Ticket</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #111827; margin: 0; padding: 0; background-color: #f3f4f6;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); margin-top: 40px; margin-bottom: 40px;">
+          <!-- Header -->
+          <div style="background-color: #4f46e5; padding: 24px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+            <div style="display: inline-block; background-color: #ffffff; border-radius: 9999px; width: 64px; height: 64px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <h1 style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0;">Booking Confirmed!</h1>
+            <p style="color: #e0e7ff; margin-top: 8px;">Your ticket has been booked successfully.</p>
+          </div>
+          
+          <!-- Content -->
+          <div style="padding: 24px;">
+            <!-- Ticket Information -->
+            <div style="margin-bottom: 24px;">
+              <h2 style="font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 16px; color: #111827;">Ticket Information</h2>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Ticket Type</p>
+                  <p style="font-weight: 500; margin: 0;">${formatTicketType(ticketData.ticketType)}</p>
+                </div>
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Quantity</p>
+                  <p style="font-weight: 500; margin: 0;">${ticketData.quantity}</p>
+                </div>
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Purchase Date</p>
+                  <p style="font-weight: 500; margin: 0;">${formatDate(ticketData.purchaseDate)}</p>
+                </div>
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Transaction ID</p>
+                  <p style="font-weight: 500; margin: 0;">${ticketData.transactionId}</p>
+                </div>
+              </div>
+              
+              ${formattedAddons}
+              
+              <div style="margin-top: 16px; padding: 16px; background-color: #f9fafb; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                  <p style="margin: 0; color: #6b7280; font-size: 14px;">Subtotal:</p>
+                  <p style="margin: 0; font-weight: 500;">${formatCurrency(ticketData.subtotal)}</p>
+                </div>
+                
+                ${discountSection}
+                
+                <div style="display: flex; justify-content: space-between; border-top: 1px solid #e5e7eb; padding-top: 10px; margin-top: 10px;">
+                  <p style="margin: 0; font-weight: 600; font-size: 14px;">Total Amount Paid:</p>
+                  <p style="margin: 0; font-weight: 700; font-size: 18px;">${formatCurrency(ticketData.totalPrice)}</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Attendee Information -->
+            <div style="margin-bottom: 24px;">
+              <h2 style="font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 16px; color: #111827;">Attendee Information</h2>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Name</p>
+                  <p style="font-weight: 500; margin: 0;">${registrationData.fullName}</p>
+                </div>
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Email</p>
+                  <p style="font-weight: 500; margin: 0;">${registrationData.email}</p>
+                </div>
+                ${registrationData.phone ? `
+                <div>
+                  <p style="color: #6b7280; font-size: 14px; margin-bottom: 4px;">Phone</p>
+                  <p style="font-weight: 500; margin: 0;">${registrationData.phone}</p>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+            
+            <!-- Event Details -->
+            <div style="margin-bottom: 24px; padding: 16px; background-color: #f9fafb; border-radius: 8px;">
+              <h2 style="font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 16px; color: #111827;">Event Details</h2>
+              <p style="font-weight: 600; margin: 0 0 4px 0;">Tech Conference 2025</p>
+              <p style="margin: 0 0 4px 0;">May 15-17, 2025</p>
+              <p style="margin: 0 0 4px 0;">San Francisco Convention Center</p>
+              <p style="margin: 0 0 16px 0;">123 Tech Blvd, San Francisco, CA 94103</p>
+              <p style="margin: 0; font-size: 14px; color: #6b7280;">Please arrive 30 minutes before the event for check-in.</p>
+            </div>
+            
+            <!-- Ticket -->
+            <div style="border: 2px dashed #d1d5db; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+              <h2 style="font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                <span>Your Ticket</span>
+              </h2>
+              
+              <div style="background-color: #1f2937; color: white; padding: 16px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                  <div>
+                    <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; margin: 0 0 4px 0;">ATTENDEE</p>
+                    <p style="font-weight: 700; margin: 0;">${registrationData.fullName}</p>
+                  </div>
+                  <div style="text-align: right;">
+                    <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; margin: 0 0 4px 0;">TICKET TYPE</p>
+                    <p style="font-weight: 700; margin: 0;">${formatTicketType(ticketData.ticketType)}</p>
+                  </div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                  <div>
+                    <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; margin: 0 0 4px 0;">EVENT</p>
+                    <p style="font-weight: 700; margin: 0;">Tech Conference 2025</p>
+                  </div>
+                  <div style="text-align: right;">
+                    <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; margin: 0 0 4px 0;">DATE</p>
+                    <p style="font-weight: 700; margin: 0;">May 15-17, 2025</p>
+                  </div>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between;">
+                  <div>
+                    <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; margin: 0 0 4px 0;">LOCATION</p>
+                    <p style="font-weight: 700; margin: 0;">San Francisco Convention Center</p>
+                  </div>
+                  <div style="text-align: right;">
+                    <p style="color: #9ca3af; font-size: 12px; text-transform: uppercase; margin: 0 0 4px 0;">TRANSACTION ID</p>
+                    <p style="font-weight: 500; font-size: 14px; margin: 0;">${ticketData.transactionId}</p>
+                  </div>
+                </div>
+                
+                <div style="margin-top: 16px; border-top: 1px solid #374151; padding-top: 16px; text-align: center;">
+                  <p style="font-size: 14px; margin: 0 0 8px 0;">Scan this QR code at the event entrance</p>
+                  <div style="background-color: #e5e7eb; height: 128px; width: 128px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: #6b7280; font-size: 12px;">[QR Code]</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Help Section -->
+            <div style="text-align: center; border-top: 1px solid #e5e7eb; padding-top: 24px;">
+              <h2 style="font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 8px;">Need Help?</h2>
+              <p style="color: #6b7280; margin-bottom: 16px;">If you have any questions or need assistance, please contact our support team.</p>
+              <p style="margin: 0;">
+                <a href="mailto:support@techconference.com" style="display: inline-block; background-color: #4f46e5; color: white; text-decoration: none; padding: 8px 16px; border-radius: 4px; font-weight: 500;">Email Support</a>
+                <a href="tel:+1234567890" style="display: inline-block; background-color: #e5e7eb; color: #111827; text-decoration: none; padding: 8px 16px; border-radius: 4px; font-weight: 500; margin-left: 8px;">Call Support</a>
+              </p>
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div style="background-color: #f3f4f6; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">© Tech Conference 2025. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  const sendTicketByEmail = async () => {
+    setIsSendingEmail(true);
+    
+    try {
+      // Track email send action
+      trackEvent("send_ticket_email", {
+        ticketType: ticketData.ticketType,
+      });
+      
+      const emailContent = generateEmailTicket();
+      
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: registrationData.email,
+          message: emailContent,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to send email');
+      }
+      
+      setEmailSent(true);
+      setTimeout(() => {
+        setEmailSent(false);
+      }, 5000);
+    } catch (error) {
+      console.error('Error sending ticket email:', error);
+      alert('Failed to send ticket email. Please try again.');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-black py-12">
@@ -250,10 +472,16 @@ export default function ConfirmationPage() {
               <div className="border border-dashed border-gray-300 rounded-lg p-4">
                 <div className="flex justify-between items-center mb-2">
                   <h3 className="text-lg font-medium">Your Ticket</h3>
-                  <Button variant="ghost" size="sm" className="flex items-center gap-1">
-                    <Download className="h-4 w-4" />
-                    Download
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button variant="ghost" size="sm" className="flex items-center gap-1" onClick={sendTicketByEmail} disabled={isSendingEmail}>
+                      <Mail className="h-4 w-4" />
+                      {isSendingEmail ? "Sending..." : emailSent ? "Sent!" : "Email Ticket"}
+                    </Button>
+                    <Button variant="ghost" size="sm" className="flex items-center gap-1">
+                      <Download className="h-4 w-4" />
+                      Download
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="bg-black p-4 rounded border">
