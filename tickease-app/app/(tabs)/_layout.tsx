@@ -86,6 +86,16 @@ const AnimatedIcon = ({ name, color, size, focused }) => {
           }}
         />
         <Tabs.Screen
+          name="dashboard"
+          options={{
+            title: "Dashboard",
+            headerShown: false,
+            tabBarIcon: ({ color, size, focused }) => (
+              <AnimatedIcon name="stats-chart" size={size} color={color} focused={focused} />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="account"
           options={{
             title: "Account",

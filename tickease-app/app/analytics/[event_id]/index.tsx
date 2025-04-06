@@ -199,15 +199,7 @@ export default function AnalyticsPage() {
         </View>
       </View>
       
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>User sentiments</Text>
-        <View style={styles.card}>
-          <Text style={styles.sentimentText}>
-            helloooo hehehehehehehehehe heheheheheheheheh eheheheheh eehehehehehehehehehe
-          </Text>
-        </View>
-      </View>
-      
+     
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Average rating</Text>
         <View style={styles.card}>
