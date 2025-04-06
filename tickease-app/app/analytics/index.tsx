@@ -167,7 +167,7 @@ async function fetchDeviceData() {
     const deviceData = registration.device;
     
     // Determine device type based on isMobile flag
-    let deviceType = deviceData.os.split(" ")[0]
+    let deviceType = deviceData.os.split(" ")[0] || 'Other';
     acc[deviceType] = (acc[deviceType] || 0) + 1;
     return acc;
   }, {});
@@ -176,7 +176,7 @@ async function fetchDeviceData() {
   const total = Object.values(groupedData).reduce((sum, value) => sum + (value as number), 0);
 
   // Define consistent colors for device types
-  const colors = {
+  const deviceColors: Record<string, string> = {
     'Android': '#4682B4',
     'Windows': '#32CD32',
     'Linux': '#FF0000',
@@ -188,7 +188,7 @@ async function fetchDeviceData() {
   return Object.entries(groupedData).map(([device, count]) => ({
     device,
     percentage: Math.round((count as number / total) * 100),
-    color: colors[device] || '#FF69B4' // Use pink for unknown device types
+    color: deviceColors[device] || deviceColors['Other'] // Fallback to 'Other' color
   }));
 }
 
@@ -214,11 +214,11 @@ async function fetchLanguageData() {
   const total = Object.values(groupedData).reduce((sum, value) => sum + (value as number), 0);
 
   // Define consistent colors for common languages
-  const colors = {
-    'English': '#2F4F4F',
-    'Bengali': '#4169E1',
+  const languageColors: Record<string, string> = {
+    'en-US': '#2F4F4F',
+    'en-IN': '#4169E1',
     'Hindi': '#FFA500',
-    'Marathi': '#FF00FF',
+    'en': '#FF00FF',
     'Other': '#FF69B4'
   };
 
@@ -226,7 +226,7 @@ async function fetchLanguageData() {
   return Object.entries(groupedData).map(([language, count]) => ({
     language,
     percentage: Math.round((count as number / total) * 100),
-    color: colors[language] || '#' + Math.floor(Math.random()*16777215).toString(16) // fallback random color
+    color: languageColors[language] || languageColors['Other'] // Fallback to 'Other' color
   }));
 }
 
@@ -260,15 +260,15 @@ async function fetchRatingData() {
 }
 
 export default function AnalyticsPage() {
-  const [timeframe, setTimeframe] = useState('day');
-  const [ticketsPerDayData, setTicketsPerDayData] = useState([]);
-  const [eventData, setEventData] = useState([]);
-  const [userSourceData, setUserSourceData] = useState([]);
-  const [deviceData, setDeviceData] = useState([]);
-  const [languageData, setLanguageData] = useState([]);
+  const [timeframe, setTimeframe] = useState<'day' | 'month'>('day');
+  const [ticketsPerDayData, setTicketsPerDayData] = useState<{day: string; value: number}[]>([]);
+  const [eventData, setEventData] = useState<{name: string; value: number; color: string}[]>([]);
+  const [userSourceData, setUserSourceData] = useState<{source: string; value: number; color: string}[]>([]);
+  const [deviceData, setDeviceData] = useState<{device: string; percentage: number; color: string}[]>([]);
+  const [languageData, setLanguageData] = useState<{language: string; percentage: number; color: string}[]>([]);
   const [ratingData, setRatingData] = useState({
     average: 0,
-    totalRatings: 0,
+    totalpeople: 0,
     votingPeople: 0
   });
   const [totalUsers, setTotalUsers] = useState(0);
@@ -289,7 +289,11 @@ export default function AnalyticsPage() {
       setUserSourceData(sourceData.data);
       setDeviceData(devicesData);
       setLanguageData(langData);
-      setRatingData(ratings);
+      setRatingData({
+        average: ratings.average,
+        totalpeople: ratings.totalpeople, // Using totalpeople consistently
+        votingPeople: ratings.votingPeople
+      });
       setTotalUsers(sourceData.totalUsers);
     }
 
