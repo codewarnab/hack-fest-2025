@@ -32,6 +32,7 @@
     "next": "15.2.4",
     "next-themes": "^0.4.6",
     "nodemailer": "^6.10.0",
+    "qrcode": "^1.5.4",
     "razorpay": "^2.9.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -50,6 +51,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/shortid": "^2.2.0",

@@ -10,6 +10,7 @@ import { clearRegistrationProgress } from "@/lib/cookies"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { useAnalytics } from "@/components/analytics-provider"
 import FeedbackSurvey from "@/components/feedback-survey"
+import QRCode_generator from "qrcode"
 
 interface TicketData {
   ticketType: string
@@ -36,6 +37,7 @@ export default function ConfirmationPage() {
   const [isAddingToCalendar, setIsAddingToCalendar] = useState(false)
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("")
 
   useEffect(() => {
     // Retrieve data from session storage
@@ -43,7 +45,13 @@ export default function ConfirmationPage() {
     const registrationDataStr = sessionStorage.getItem("registrationData")
 
     if (ticketDataStr) {
-      setTicketData(JSON.parse(ticketDataStr))
+      const parsedTicketData = JSON.parse(ticketDataStr)
+      setTicketData(parsedTicketData)
+      
+      // Generate QR code when ticket data is available
+      if (parsedTicketData.transactionId) {
+        generateQRCode(parsedTicketData.transactionId)
+      }
     }
 
     if (registrationDataStr) {
@@ -65,6 +73,23 @@ export default function ConfirmationPage() {
 
     return () => clearTimeout(timer)
   }, [trackEvent])
+
+  // Generate QR code for display in the UI
+  const generateQRCode = async (transactionId: string) => {
+    try {
+      const qrCodeDataUrl = await QRCode_generator.toDataURL(transactionId, { 
+        width: 128,
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      })
+      setQrCodeUrl(qrCodeDataUrl)
+    } catch (error) {
+      console.error("Error generating QR code:", error)
+    }
+  }
 
   if (!ticketData || !registrationData) {
     return (
@@ -132,7 +157,17 @@ export default function ConfirmationPage() {
     }
   }
 
-  const generateEmailTicket = () => {
+  const generateEmailTicket = async () => {
+    // Generate QR code data URL for email
+    const qrCodeDataUrl = await QRCode_generator.toDataURL(ticketData.transactionId, { 
+      width: 128,
+      margin: 1,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+    
     // Generate HTML for email ticket
     const formattedAddons = ticketData.addons && ticketData.addons.length > 0 
       ? `<div style="margin-top: 15px;">
@@ -160,7 +195,7 @@ export default function ConfirmationPage() {
       </head>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #111827; margin: 0; padding: 0; background-color: #f3f4f6;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); margin-top: 40px; margin-bottom: 40px;">
-          <!-- Header -->
+          <!-- Header --> 
           <div style="background-color: #4f46e5; padding: 24px; text-align: center; border-bottom: 1px solid #e5e7eb;">
             <div style="display: inline-block; background-color: #ffffff; border-radius: 9999px; width: 64px; height: 64px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center;">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -286,8 +321,8 @@ export default function ConfirmationPage() {
                 
                 <div style="margin-top: 16px; border-top: 1px solid #374151; padding-top: 16px; text-align: center;">
                   <p style="font-size: 14px; margin: 0 0 8px 0;">Scan this QR code at the event entrance</p>
-                  <div style="background-color: #e5e7eb; height: 128px; width: 128px; margin: 0 auto; display: flex; align-items: center; justify-content: center;">
-                    <span style="color: #6b7280; font-size: 12px;">[QR Code]</span>
+                  <div style="margin: 0 auto; display: flex; align-items: center; justify-content: center;">
+                    <img src="${qrCodeDataUrl}" alt="QR Code" style="width: 128px; height: 128px;" />
                   </div>
                 </div>
               </div>
@@ -323,7 +358,7 @@ export default function ConfirmationPage() {
         ticketType: ticketData.ticketType,
       });
       
-      const emailContent = generateEmailTicket();
+      const emailContent = await generateEmailTicket();
       
       const response = await fetch('/api/send-email', {
         method: 'POST',
@@ -521,7 +556,11 @@ export default function ConfirmationPage() {
                   <div className="mt-4 border-t pt-4 text-center">
                     <p className="text-sm">Scan this QR code at the event entrance</p>
                     <div className="mt-2 bg-gray-100 h-32 w-32 mx-auto flex items-center justify-center">
-                      <p className="text-xs text-gray-500">[QR Code Placeholder]</p>
+                      {qrCodeUrl ? (
+                        <img src={qrCodeUrl} alt="QR Code" className="h-24 w-24" />
+                      ) : (
+                        <p className="text-xs text-gray-500">Loading QR code...</p>
+                      )}
                     </div>
                   </div>
                 </div>
